@@ -10,132 +10,94 @@
 
 // Import Routes
 
-import { Route as rootRoute } from './routes/__root'
-import { Route as DashboardLayoutImport } from './routes/dashboard/layout'
-import { Route as IndexImport } from './routes/index'
-import { Route as SettingsIndexImport } from './routes/settings/index'
-import { Route as DashboardIndexImport } from './routes/dashboard/index'
+import { Route as rootRoute } from "./routes/__root";
+import { Route as DashboardLayoutImport } from "./routes/dashboard/layout";
+import { Route as DashboardIndexImport } from "./routes/dashboard/index";
 
 // Create/Update Routes
 
 const DashboardLayoutRoute = DashboardLayoutImport.update({
-  id: '/dashboard',
-  path: '/dashboard',
+  id: "/dashboard",
+  path: "/dashboard",
   getParentRoute: () => rootRoute
-} as any)
-
-const IndexRoute = IndexImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => rootRoute
-} as any)
-
-const SettingsIndexRoute = SettingsIndexImport.update({
-  id: '/settings/',
-  path: '/settings/',
-  getParentRoute: () => rootRoute
-} as any)
+} as any);
 
 const DashboardIndexRoute = DashboardIndexImport.update({
-  id: '/',
-  path: '/',
+  id: "/",
+  path: "/",
   getParentRoute: () => DashboardLayoutRoute
-} as any)
+} as any);
 
 // Populate the FileRoutesByPath interface
 
-declare module '@tanstack/react-router' {
+declare module "@tanstack/react-router" {
   interface FileRoutesByPath {
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexImport
-      parentRoute: typeof rootRoute
-    }
-    '/dashboard': {
-      id: '/dashboard'
-      path: '/dashboard'
-      fullPath: '/dashboard'
-      preLoaderRoute: typeof DashboardLayoutImport
-      parentRoute: typeof rootRoute
-    }
-    '/dashboard/': {
-      id: '/dashboard/'
-      path: '/'
-      fullPath: '/dashboard/'
-      preLoaderRoute: typeof DashboardIndexImport
-      parentRoute: typeof DashboardLayoutImport
-    }
-    '/settings/': {
-      id: '/settings/'
-      path: '/settings'
-      fullPath: '/settings'
-      preLoaderRoute: typeof SettingsIndexImport
-      parentRoute: typeof rootRoute
-    }
+    "/dashboard": {
+      id: "/dashboard";
+      path: "/dashboard";
+      fullPath: "/dashboard";
+      preLoaderRoute: typeof DashboardLayoutImport;
+      parentRoute: typeof rootRoute;
+    };
+    "/dashboard/": {
+      id: "/dashboard/";
+      path: "/";
+      fullPath: "/dashboard/";
+      preLoaderRoute: typeof DashboardIndexImport;
+      parentRoute: typeof DashboardLayoutImport;
+    };
   }
 }
 
 // Create and export the route tree
 
 interface DashboardLayoutRouteChildren {
-  DashboardIndexRoute: typeof DashboardIndexRoute
+  DashboardIndexRoute: typeof DashboardIndexRoute;
 }
 
 const DashboardLayoutRouteChildren: DashboardLayoutRouteChildren = {
   DashboardIndexRoute: DashboardIndexRoute
-}
+};
 
 const DashboardLayoutRouteWithChildren = DashboardLayoutRoute._addFileChildren(
   DashboardLayoutRouteChildren
-)
+);
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
-  '/dashboard': typeof DashboardLayoutRouteWithChildren
-  '/dashboard/': typeof DashboardIndexRoute
-  '/settings': typeof SettingsIndexRoute
+  "/dashboard": typeof DashboardLayoutRouteWithChildren;
+  "/dashboard/": typeof DashboardIndexRoute;
 }
 
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute
-  '/dashboard': typeof DashboardIndexRoute
-  '/settings': typeof SettingsIndexRoute
+  "/dashboard": typeof DashboardIndexRoute;
 }
 
 export interface FileRoutesById {
-  __root__: typeof rootRoute
-  '/': typeof IndexRoute
-  '/dashboard': typeof DashboardLayoutRouteWithChildren
-  '/dashboard/': typeof DashboardIndexRoute
-  '/settings/': typeof SettingsIndexRoute
+  __root__: typeof rootRoute;
+  "/dashboard": typeof DashboardLayoutRouteWithChildren;
+  "/dashboard/": typeof DashboardIndexRoute;
 }
 
 export interface FileRouteTypes {
-  fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/dashboard' | '/dashboard/' | '/settings'
-  fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/dashboard' | '/settings'
-  id: '__root__' | '/' | '/dashboard' | '/dashboard/' | '/settings/'
-  fileRoutesById: FileRoutesById
+  fileRoutesByFullPath: FileRoutesByFullPath;
+  fullPaths: "/dashboard" | "/dashboard/";
+  fileRoutesByTo: FileRoutesByTo;
+  to: "/dashboard";
+  id: "__root__" | "/dashboard" | "/dashboard/";
+  fileRoutesById: FileRoutesById;
 }
 
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute
-  DashboardLayoutRoute: typeof DashboardLayoutRouteWithChildren
-  SettingsIndexRoute: typeof SettingsIndexRoute
+  DashboardLayoutRoute: typeof DashboardLayoutRouteWithChildren;
 }
 
 const rootRouteChildren: RootRouteChildren = {
-  IndexRoute: IndexRoute,
-  DashboardLayoutRoute: DashboardLayoutRouteWithChildren,
-  SettingsIndexRoute: SettingsIndexRoute
-}
+  DashboardLayoutRoute: DashboardLayoutRouteWithChildren
+};
 
 export const routeTree = rootRoute
   ._addFileChildren(rootRouteChildren)
-  ._addFileTypes<FileRouteTypes>()
+  ._addFileTypes<FileRouteTypes>();
 
 /* ROUTE_MANIFEST_START
 {
@@ -143,13 +105,8 @@ export const routeTree = rootRoute
     "__root__": {
       "filePath": "__root.tsx",
       "children": [
-        "/",
-        "/dashboard",
-        "/settings/"
+        "/dashboard"
       ]
-    },
-    "/": {
-      "filePath": "index.tsx"
     },
     "/dashboard": {
       "filePath": "dashboard/layout.tsx",
@@ -160,9 +117,6 @@ export const routeTree = rootRoute
     "/dashboard/": {
       "filePath": "dashboard/index.tsx",
       "parent": "/dashboard"
-    },
-    "/settings/": {
-      "filePath": "settings/index.tsx"
     }
   }
 }

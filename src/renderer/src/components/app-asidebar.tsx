@@ -1,4 +1,4 @@
-import { Home, Inbox, Settings } from 'lucide-react'
+import { Home, Inbox, Settings } from "lucide-react";
 
 import {
   Sidebar,
@@ -9,26 +9,26 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem
-} from '@renderer/components/ui/sidebar'
-import { Link } from '@tanstack/react-router'
+} from "@renderer/components/ui/sidebar";
+import { Link } from "@tanstack/react-router";
 // Menu items.
 const items = [
   {
-    title: 'Home',
-    url: '/',
+    title: "Home",
+    url: "/",
     icon: Home
   },
   {
-    title: 'Dashboard',
-    url: '/dashboard',
+    title: "Dashboard",
+    url: "/dashboard",
     icon: Inbox
   },
   {
-    title: 'Settings',
-    url: '/settings',
+    title: "Settings",
+    url: "/settings",
     icon: Settings
   }
-]
+];
 
 export function AppSidebar() {
   return (
@@ -53,5 +53,5 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
     </Sidebar>
-  )
+  );
 }
