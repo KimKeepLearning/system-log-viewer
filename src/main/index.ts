@@ -1,5 +1,6 @@
 import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
+import * as fs from 'fs'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 
@@ -51,6 +52,22 @@ app.whenReady().then(() => {
 
   // IPC test
   ipcMain.on('ping', () => console.log('pong'))
+
+  ipcMain.handle('read-file', (_, filePath) => {
+    console.log('[Main] Received read-file request for:', filePath)
+    try {
+      if (!fs.existsSync(filePath)) {
+        console.error('[Main] File does not exist:', filePath)
+        return 'Error: File does not exist'
+      }
+      const content = fs.readFileSync(filePath, 'utf-8')
+      console.log('[Main] File read successfully, length:', content.length)
+      return content
+    } catch (e) {
+      console.error('[Main] Error reading file:', e)
+      return `Error reading file: ${e}`
+    }
+  })
 
   createWindow()
 

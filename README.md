@@ -4,7 +4,6 @@ A cross-platform desktop application built with Electron, React 19, and the TanS
 
 <img width="900" alt="image" src="https://github.com/user-attachments/assets/1c142933-d2f3-4a6d-8f19-f10e6c147a52" />
 
-
 ## Features
 
 - **Cross-Platform**: Works on Windows, macOS, and Linux
