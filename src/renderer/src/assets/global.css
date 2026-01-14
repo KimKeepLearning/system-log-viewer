@@ -1,6 +1,10 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "../../../../node_modules/@vibeus/ui/dist/tv.css";
+@import "../../../../node_modules/@vibeus/ui/dist/tailwind.css";
 
+@source "../../../../node_modules/@vibeus/ui/dist/ripple-button.cjs";
+@source "../../../../node_modules/@vibeus/ui/dist/input.cjs";
 @custom-variant dark (&:is(.dark *));
 
 :root {
