@@ -1,9 +1,9 @@
-import { logContentAtom } from "@renderer/lib/atom";
+import { loadLogContentAtom } from "@renderer/lib/atom";
 import { useNavigate } from "@tanstack/react-router";
 import { useSetAtom } from "jotai";
 
 export const useSelectFile = () => {
-  const setLogContent = useSetAtom(logContentAtom);
+  const loadLogContent = useSetAtom(loadLogContentAtom);
   const navigate = useNavigate();
 
   const handleFileSelect = async (file: File) => {
@@ -23,8 +23,8 @@ export const useSelectFile = () => {
       try {
         const result = await window.electron.ipcRenderer.invoke("read-file", path);
         if (typeof result === "string") {
-          setLogContent(result);
-          navigate({ to: "/dashboard" });
+          loadLogContent(result);
+          navigate({ to: "/dashboard/main" });
         }
       } catch (err) {
         console.error("Error reading file:", err);

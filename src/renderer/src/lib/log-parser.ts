@@ -26,3 +26,17 @@ export const parseDeviceInfo = (content: string): DeviceInfo => {
     arcStatus: arcStatus || "unknown"
   };
 };
+
+export const parseChromeUserLog = (content: string): string[] => {
+  // Matches:
+  // Profile[0] chrome_user_log=<multiline>
+  // ---------- START ----------
+  // ... content ...
+  // ---------- END ----------
+  const regex =
+    /Profile\[0\]\s+chrome_user_log=<multiline>\s*-+\s*START\s*-+\s*([\s\S]*?)\s*-+\s*END\s*-+/;
+  const match = content.match(regex);
+
+  const logString = match && match[1] ? match[1].trim() : "";
+  return logString.split("\n");
+};

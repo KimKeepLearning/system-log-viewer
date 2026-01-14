@@ -11,12 +11,19 @@
 // Import Routes
 
 import { Route as rootRoute } from "./routes/__root";
+import { Route as DashboardImport } from "./routes/dashboard";
 import { Route as IndexImport } from "./routes/index";
 import { Route as RawIndexImport } from "./routes/raw/index";
 import { Route as HomeIndexImport } from "./routes/home/index";
-import { Route as DashboardIndexImport } from "./routes/dashboard/index";
+import { Route as DashboardMainImport } from "./routes/dashboard/main";
 
 // Create/Update Routes
+
+const DashboardRoute = DashboardImport.update({
+  id: "/dashboard",
+  path: "/dashboard",
+  getParentRoute: () => rootRoute
+} as any);
 
 const IndexRoute = IndexImport.update({
   id: "/",
@@ -36,10 +43,10 @@ const HomeIndexRoute = HomeIndexImport.update({
   getParentRoute: () => rootRoute
 } as any);
 
-const DashboardIndexRoute = DashboardIndexImport.update({
-  id: "/dashboard/",
-  path: "/dashboard/",
-  getParentRoute: () => rootRoute
+const DashboardMainRoute = DashboardMainImport.update({
+  id: "/main",
+  path: "/main",
+  getParentRoute: () => DashboardRoute
 } as any);
 
 // Populate the FileRoutesByPath interface
@@ -53,12 +60,19 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof IndexImport;
       parentRoute: typeof rootRoute;
     };
-    "/dashboard/": {
-      id: "/dashboard/";
+    "/dashboard": {
+      id: "/dashboard";
       path: "/dashboard";
       fullPath: "/dashboard";
-      preLoaderRoute: typeof DashboardIndexImport;
+      preLoaderRoute: typeof DashboardImport;
       parentRoute: typeof rootRoute;
+    };
+    "/dashboard/main": {
+      id: "/dashboard/main";
+      path: "/main";
+      fullPath: "/dashboard/main";
+      preLoaderRoute: typeof DashboardMainImport;
+      parentRoute: typeof DashboardImport;
     };
     "/home/": {
       id: "/home/";
@@ -79,16 +93,28 @@ declare module "@tanstack/react-router" {
 
 // Create and export the route tree
 
+interface DashboardRouteChildren {
+  DashboardMainRoute: typeof DashboardMainRoute;
+}
+
+const DashboardRouteChildren: DashboardRouteChildren = {
+  DashboardMainRoute: DashboardMainRoute
+};
+
+const DashboardRouteWithChildren = DashboardRoute._addFileChildren(DashboardRouteChildren);
+
 export interface FileRoutesByFullPath {
   "/": typeof IndexRoute;
-  "/dashboard": typeof DashboardIndexRoute;
+  "/dashboard": typeof DashboardRouteWithChildren;
+  "/dashboard/main": typeof DashboardMainRoute;
   "/home": typeof HomeIndexRoute;
   "/raw": typeof RawIndexRoute;
 }
 
 export interface FileRoutesByTo {
   "/": typeof IndexRoute;
-  "/dashboard": typeof DashboardIndexRoute;
+  "/dashboard": typeof DashboardRouteWithChildren;
+  "/dashboard/main": typeof DashboardMainRoute;
   "/home": typeof HomeIndexRoute;
   "/raw": typeof RawIndexRoute;
 }
@@ -96,30 +122,31 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRoute;
   "/": typeof IndexRoute;
-  "/dashboard/": typeof DashboardIndexRoute;
+  "/dashboard": typeof DashboardRouteWithChildren;
+  "/dashboard/main": typeof DashboardMainRoute;
   "/home/": typeof HomeIndexRoute;
   "/raw/": typeof RawIndexRoute;
 }
 
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath;
-  fullPaths: "/" | "/dashboard" | "/home" | "/raw";
+  fullPaths: "/" | "/dashboard" | "/dashboard/main" | "/home" | "/raw";
   fileRoutesByTo: FileRoutesByTo;
-  to: "/" | "/dashboard" | "/home" | "/raw";
-  id: "__root__" | "/" | "/dashboard/" | "/home/" | "/raw/";
+  to: "/" | "/dashboard" | "/dashboard/main" | "/home" | "/raw";
+  id: "__root__" | "/" | "/dashboard" | "/dashboard/main" | "/home/" | "/raw/";
   fileRoutesById: FileRoutesById;
 }
 
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute;
-  DashboardIndexRoute: typeof DashboardIndexRoute;
+  DashboardRoute: typeof DashboardRouteWithChildren;
   HomeIndexRoute: typeof HomeIndexRoute;
   RawIndexRoute: typeof RawIndexRoute;
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  DashboardIndexRoute: DashboardIndexRoute,
+  DashboardRoute: DashboardRouteWithChildren,
   HomeIndexRoute: HomeIndexRoute,
   RawIndexRoute: RawIndexRoute
 };
@@ -135,7 +162,7 @@ export const routeTree = rootRoute
       "filePath": "__root.tsx",
       "children": [
         "/",
-        "/dashboard/",
+        "/dashboard",
         "/home/",
         "/raw/"
       ]
@@ -143,8 +170,15 @@ export const routeTree = rootRoute
     "/": {
       "filePath": "index.tsx"
     },
-    "/dashboard/": {
-      "filePath": "dashboard/index.tsx"
+    "/dashboard": {
+      "filePath": "dashboard.tsx",
+      "children": [
+        "/dashboard/main"
+      ]
+    },
+    "/dashboard/main": {
+      "filePath": "dashboard/main.tsx",
+      "parent": "/dashboard"
     },
     "/home/": {
       "filePath": "home/index.tsx"

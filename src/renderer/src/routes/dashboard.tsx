@@ -6,7 +6,7 @@ import { Button } from "@vibeus/ui";
 import { useSelectFile } from "@renderer/hooks/use-select-file";
 import { useEasterEgg } from "@renderer/hooks/use-easter-egg";
 
-export const Route = createFileRoute("/dashboard/")({
+export const Route = createFileRoute("/dashboard")({
   component: RouteComponent
 });
 
@@ -16,7 +16,7 @@ function RouteComponent() {
   const { handleUploadClick } = useSelectFile();
   const { handleLogoClick } = useEasterEgg();
   return (
-    <div className="w-screen h-screen bg-fill-background-surface-l1">
+    <div className="w-screen h-screen bg-fill-background-surface-l1 scrollbar-container">
       {/* Header */}
       <div className="w-full flex items-center p-spacing-sm">
         {/* Logo */}

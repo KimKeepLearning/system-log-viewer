@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Providers } from "@renderer/components/providers";
 import { FileDropZone } from "@renderer/components/file-drop-zone";
-import { logContentAtom } from "@renderer/lib/atom";
+import { loadLogContentAtom } from "@renderer/lib/atom";
 import { useSetAtom } from "jotai";
 import { useState } from "react";
 
@@ -10,7 +10,7 @@ export const Route = createFileRoute("/home/")({
 });
 
 function RouteComponent() {
-  const setLogContent = useSetAtom(logContentAtom);
+  const loadLogContent = useSetAtom(loadLogContentAtom);
   const [error, setError] = useState<string>();
   const navigate = useNavigate();
 
@@ -46,9 +46,9 @@ function RouteComponent() {
         console.log("[Renderer] IPC Result length:", result ? result.length : "null");
 
         if (typeof result === "string") {
-          setLogContent(result);
+          loadLogContent(result);
           navigate({
-            to: "/dashboard"
+            to: "/dashboard/main"
           });
         } else {
           setError("Error: Failed to read file (IPC returned null)");

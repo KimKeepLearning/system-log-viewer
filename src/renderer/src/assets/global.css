@@ -125,3 +125,18 @@
     @apply bg-background text-foreground;
   }
 }
+
+.scrollbar-container {
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+.scrollbar-container::-webkit-scrollbar {
+  width: 8px;
+}
+.scrollbar-container::-webkit-scrollbar-thumb {
+  background: gainsboro;
+  border-radius: 4px;
+}
+.scrollbar-container::-webkit-scrollbar-track {
+  background-color: transparent;
+}
