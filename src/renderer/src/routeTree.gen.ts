@@ -12,6 +12,7 @@
 
 import { Route as rootRoute } from "./routes/__root";
 import { Route as IndexImport } from "./routes/index";
+import { Route as RawIndexImport } from "./routes/raw/index";
 import { Route as HomeIndexImport } from "./routes/home/index";
 import { Route as DashboardIndexImport } from "./routes/dashboard/index";
 
@@ -20,6 +21,12 @@ import { Route as DashboardIndexImport } from "./routes/dashboard/index";
 const IndexRoute = IndexImport.update({
   id: "/",
   path: "/",
+  getParentRoute: () => rootRoute
+} as any);
+
+const RawIndexRoute = RawIndexImport.update({
+  id: "/raw/",
+  path: "/raw/",
   getParentRoute: () => rootRoute
 } as any);
 
@@ -60,6 +67,13 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof HomeIndexImport;
       parentRoute: typeof rootRoute;
     };
+    "/raw/": {
+      id: "/raw/";
+      path: "/raw";
+      fullPath: "/raw";
+      preLoaderRoute: typeof RawIndexImport;
+      parentRoute: typeof rootRoute;
+    };
   }
 }
 
@@ -69,12 +83,14 @@ export interface FileRoutesByFullPath {
   "/": typeof IndexRoute;
   "/dashboard": typeof DashboardIndexRoute;
   "/home": typeof HomeIndexRoute;
+  "/raw": typeof RawIndexRoute;
 }
 
 export interface FileRoutesByTo {
   "/": typeof IndexRoute;
   "/dashboard": typeof DashboardIndexRoute;
   "/home": typeof HomeIndexRoute;
+  "/raw": typeof RawIndexRoute;
 }
 
 export interface FileRoutesById {
@@ -82,14 +98,15 @@ export interface FileRoutesById {
   "/": typeof IndexRoute;
   "/dashboard/": typeof DashboardIndexRoute;
   "/home/": typeof HomeIndexRoute;
+  "/raw/": typeof RawIndexRoute;
 }
 
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath;
-  fullPaths: "/" | "/dashboard" | "/home";
+  fullPaths: "/" | "/dashboard" | "/home" | "/raw";
   fileRoutesByTo: FileRoutesByTo;
-  to: "/" | "/dashboard" | "/home";
-  id: "__root__" | "/" | "/dashboard/" | "/home/";
+  to: "/" | "/dashboard" | "/home" | "/raw";
+  id: "__root__" | "/" | "/dashboard/" | "/home/" | "/raw/";
   fileRoutesById: FileRoutesById;
 }
 
@@ -97,12 +114,14 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute;
   DashboardIndexRoute: typeof DashboardIndexRoute;
   HomeIndexRoute: typeof HomeIndexRoute;
+  RawIndexRoute: typeof RawIndexRoute;
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DashboardIndexRoute: DashboardIndexRoute,
-  HomeIndexRoute: HomeIndexRoute
+  HomeIndexRoute: HomeIndexRoute,
+  RawIndexRoute: RawIndexRoute
 };
 
 export const routeTree = rootRoute
@@ -117,7 +136,8 @@ export const routeTree = rootRoute
       "children": [
         "/",
         "/dashboard/",
-        "/home/"
+        "/home/",
+        "/raw/"
       ]
     },
     "/": {
@@ -128,6 +148,9 @@ export const routeTree = rootRoute
     },
     "/home/": {
       "filePath": "home/index.tsx"
+    },
+    "/raw/": {
+      "filePath": "raw/index.tsx"
     }
   }
 }

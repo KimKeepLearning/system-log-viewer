@@ -4,6 +4,7 @@ import { useAtomValue } from "jotai";
 import LogoIcon from "@renderer/assets/file.svg?react";
 import { Button } from "@vibeus/ui";
 import { useSelectFile } from "@renderer/hooks/use-select-file";
+import { useEasterEgg } from "@renderer/hooks/use-easter-egg";
 
 export const Route = createFileRoute("/dashboard/")({
   component: RouteComponent
@@ -13,13 +14,13 @@ function RouteComponent() {
   const deviceInfo = useAtomValue(baseDeviceInfoAtom);
 
   const { handleUploadClick } = useSelectFile();
-
+  const { handleLogoClick } = useEasterEgg();
   return (
     <div className="w-screen h-screen bg-fill-background-surface-l1">
       {/* Header */}
       <div className="w-full flex items-center p-spacing-sm">
         {/* Logo */}
-        <div className="flex items-center gap-spacing-xs">
+        <div className="flex items-center gap-spacing-xs" onClick={handleLogoClick}>
           <LogoIcon className="size-size-sm" />
           <div className="text-body-bold">System Log Viewer</div>
         </div>

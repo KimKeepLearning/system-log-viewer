@@ -1,7 +1,8 @@
 import { RouterProvider, createHashHistory, createRouter } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import ReactDOM from "react-dom/client";
-
+import { Provider } from "jotai";
+import { store } from "./lib/store";
 // Import the generated route tree
 import { routeTree } from "./routeTree.gen";
 
@@ -22,7 +23,9 @@ if (!rootElement.innerHTML) {
   const root = ReactDOM.createRoot(rootElement);
   root.render(
     <StrictMode>
-      <RouterProvider router={router} />
+      <Provider store={store}>
+        <RouterProvider router={router} />
+      </Provider>
     </StrictMode>
   );
 }
