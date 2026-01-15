@@ -4,4 +4,4 @@ export interface IUserLog {
   message: string;
   process: string;
   source: string;
-};
+}

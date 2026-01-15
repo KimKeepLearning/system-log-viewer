@@ -1,4 +1,9 @@
-import { chromeUserLogAtom } from "@renderer/lib/atom";
+import {
+  chromeUserLogAtom,
+  chromePreviousUserLogAtom,
+  chromeSystemLogAtom,
+  chromePreviousSystemLogAtom
+} from "@renderer/lib/atom";
 import { useAtomValue } from "jotai";
 import { TabsContent } from "@renderer/components/ui/tabs";
 import { LogType, IUserLog } from "@renderer/lib/typings";
@@ -31,6 +36,7 @@ const LogRow = ({ log, isMain = true }: { log: IUserLog; isMain?: boolean }) => 
       !isMain && "pl-8 bg-muted/20"
     )}
   >
+    {!isMain && <>&gt;</>}
     <span className={cn("shrink-0 w-12 font-bold text-center", LogLevelMap[log.level])}>
       {log.level}
     </span>
@@ -43,7 +49,9 @@ const LogRow = ({ log, isMain = true }: { log: IUserLog; isMain?: boolean }) => 
     <span className="text-muted-foreground shrink-0 min-w-[180px]">{log.timestamp}</span>
     <span className="whitespace-pre-wrap break-all flex-1 text-text-secondary">
       {log.source && <span className="text-muted-foreground mr-1">[{log.source}]</span>}
-      <span className="text-text-primary font-medium"><b>{log.message}</b></span>
+      <span className="text-text-primary font-medium">
+        <b>{log.message}</b>
+      </span>
     </span>
   </div>
 );
@@ -73,7 +81,9 @@ const GroupedRow = ({ group }: { group: LogGroup }) => {
             <span className="text-muted-foreground shrink-0 min-w-[180px]">{main.timestamp}</span>
             <span className="whitespace-pre-wrap break-all flex-1 text-text-secondary">
               {main.source && <span className="text-muted-foreground">[{main.source}]</span>}
-              <span className="text-text-primary font-medium"><b>{main.message}</b></span>
+              <span className="text-text-primary font-medium">
+                <b>{main.message}</b>
+              </span>
               <CollapsibleTrigger asChild>
                 <Badge
                   variant="secondary"
@@ -96,16 +106,34 @@ const GroupedRow = ({ group }: { group: LogGroup }) => {
   );
 };
 
-export const ChromeUserLog = () => {
+export const ChromeUserLog = ({ logType }: { logType: LogType }) => {
   const chromeUserLog = useAtomValue(chromeUserLogAtom);
+  const chromePreviousUserLog = useAtomValue(chromePreviousUserLogAtom);
+  const chromeSystemLog = useAtomValue(chromeSystemLogAtom);
+  const chromePreviousSystemLog = useAtomValue(chromePreviousSystemLogAtom);
+
+  const logs = useMemo(() => {
+    switch (logType) {
+      case LogType.ChromeUserLog:
+        return chromeUserLog;
+      case LogType.ChromePreviousUserLog:
+        return chromePreviousUserLog;
+      case LogType.ChromeSystemLog:
+        return chromeSystemLog;
+      case LogType.ChromePreviousSystemLog:
+        return chromePreviousSystemLog;
+      default:
+        return [];
+    }
+  }, [logType, chromeUserLog, chromePreviousUserLog, chromeSystemLog, chromePreviousSystemLog]);
 
   const groupedLogs = useMemo(() => {
-    if (!chromeUserLog) return [];
+    if (!logs) return [];
 
     const groups: LogGroup[] = [];
     let currentGroup: LogGroup | null = null;
 
-    for (const log of chromeUserLog) {
+    for (const log of logs) {
       if (
         currentGroup &&
         log.message === currentGroup.main.message &&
@@ -125,13 +153,10 @@ export const ChromeUserLog = () => {
       }
     }
     return groups;
-  }, [chromeUserLog]);
+  }, [logs]);
 
   return (
-    <TabsContent
-      value={LogType.ChromeUserLog}
-      className="h-[calc(100vh-140px)] scrollbar-container"
-    >
+    <TabsContent value={logType} className="h-[calc(100vh-140px)] scrollbar-container">
       {groupedLogs.map((group, index) => (
         <GroupedRow key={index} group={group} />
       ))}

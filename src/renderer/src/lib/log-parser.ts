@@ -28,14 +28,17 @@ export const parseDeviceInfo = (content: string): DeviceInfo => {
   };
 };
 
-export const parseChromeUserLog = (content: string): IUserLog[] => {
+export const parseLogSection = (content: string, key: string): IUserLog[] => {
   // Matches:
-  // Profile[0] chrome_user_log=<multiline>
+  // (Profile[0] )? key=<multiline>
   // ---------- START ----------
   // ... content ...
   // ---------- END ----------
-  const regex =
-    /Profile\[0\]\s+chrome_user_log=<multiline>\s*-+\s*START\s*-+\s*([\s\S]*?)\s*-+\s*END\s*-+/;
+  // We escape dots in key just in case, though usually simpler is fine.
+  const escapedKey = key.replace(/\./g, "\\.");
+  const regex = new RegExp(
+    `(?:Profile\\[0\\]\\s+)?${escapedKey}=<multiline>\\s*-+\\s*START\\s*-+\\s*([\\s\\S]*?)\\s*-+\\s*END\\s*-+`
+  );
   const match = content.match(regex);
 
   const logString = match && match[1] ? match[1].trim() : "";
