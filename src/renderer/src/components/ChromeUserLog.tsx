@@ -2,7 +2,10 @@ import {
   chromeUserLogAtom,
   chromePreviousUserLogAtom,
   chromeSystemLogAtom,
-  chromePreviousSystemLogAtom
+  chromePreviousSystemLogAtom,
+  apsServerLogAtom,
+  bluetoothLogAtom,
+  clobberStateAtom
 } from "@renderer/lib/atom";
 import { useAtomValue } from "jotai";
 import { TabsContent } from "@renderer/components/ui/tabs";
@@ -111,7 +114,9 @@ export const ChromeUserLog = ({ logType }: { logType: LogType }) => {
   const chromePreviousUserLog = useAtomValue(chromePreviousUserLogAtom);
   const chromeSystemLog = useAtomValue(chromeSystemLogAtom);
   const chromePreviousSystemLog = useAtomValue(chromePreviousSystemLogAtom);
-
+  const apsServerLog = useAtomValue(apsServerLogAtom);
+  const bluetoothLog = useAtomValue(bluetoothLogAtom);
+  const clobberStateLog = useAtomValue(clobberStateAtom);
   const logs = useMemo(() => {
     switch (logType) {
       case LogType.ChromeUserLog:
@@ -122,11 +127,25 @@ export const ChromeUserLog = ({ logType }: { logType: LogType }) => {
         return chromeSystemLog;
       case LogType.ChromePreviousSystemLog:
         return chromePreviousSystemLog;
+      case LogType.ApsServer:
+        return apsServerLog;
+      case LogType.BluetoothLog:
+        return bluetoothLog;
+      case LogType.ClobberState:
+        return clobberStateLog;
       default:
         return [];
     }
-  }, [logType, chromeUserLog, chromePreviousUserLog, chromeSystemLog, chromePreviousSystemLog]);
-
+  }, [
+    logType,
+    chromeUserLog,
+    chromePreviousUserLog,
+    chromeSystemLog,
+    chromePreviousSystemLog,
+    apsServerLog,
+    bluetoothLog,
+    clobberStateLog
+  ]);
   const groupedLogs = useMemo(() => {
     if (!logs) return [];
 

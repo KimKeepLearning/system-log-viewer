@@ -37,10 +37,9 @@ export const parseLogSection = (content: string, key: string): IUserLog[] => {
   // We escape dots in key just in case, though usually simpler is fine.
   const escapedKey = key.replace(/\./g, "\\.");
   const regex = new RegExp(
-    `(?:Profile\\[0\\]\\s+)?${escapedKey}=<multiline>\\s*-+\\s*START\\s*-+\\s*([\\s\\S]*?)\\s*-+\\s*END\\s*-+`
+    `(?:Profile\\[0\\]\\s+)?${escapedKey}=<multiline>[\\s\\S]*?-+\\s*START\\s*-+\\s*([\\s\\S]*?)\\s*-+\\s*END\\s*-+`
   );
   const match = content.match(regex);
-
   const logString = match && match[1] ? match[1].trim() : "";
   const lines = logString.split("\n");
 

@@ -7,9 +7,15 @@ import {
   chromeUserLogAtom,
   chromePreviousUserLogAtom,
   chromePreviousSystemLogAtom,
-  chromeSystemLogAtom
+  chromeSystemLogAtom,
+  loginTimesAtom,
+  alsaControlsAtom,
+  apsServerLogAtom,
+  audioDiagnosticsLogAtom,
+  bluetoothLogAtom,
+  clobberStateAtom
 } from "@renderer/lib/atom";
-
+import { PlainText } from "@renderer/components/PlainText";
 export const Route = createFileRoute("/dashboard/main")({
   component: RouteComponent
 });
@@ -19,6 +25,12 @@ function RouteComponent() {
   const chromePreviousUserLog = useAtomValue(chromePreviousUserLogAtom);
   const chromeSystemLog = useAtomValue(chromeSystemLogAtom);
   const chromePreviousSystemLog = useAtomValue(chromePreviousSystemLogAtom);
+  const loginTimes = useAtomValue(loginTimesAtom);
+  const alsaControls = useAtomValue(alsaControlsAtom);
+  const apsServerLog = useAtomValue(apsServerLogAtom);
+  const audioDiagnosticsLog = useAtomValue(audioDiagnosticsLogAtom);
+  const bluetoothLog = useAtomValue(bluetoothLogAtom);
+  const clobberStateLog = useAtomValue(clobberStateAtom);
   return (
     <div className="w-full h-[calc(100vh-100px)] scrollbar-container overflow-hidden p-4">
       <Tabs defaultValue={LogType.ChromeUserLog} orientation="vertical">
@@ -39,11 +51,35 @@ function RouteComponent() {
               Chrome System Log(Previous)
             </TabsTrigger>
           )}
+          {loginTimes.length > 0 && (
+            <TabsTrigger value={LogType.LoginTimes}>Login Times</TabsTrigger>
+          )}
+          {alsaControls.length > 0 && (
+            <TabsTrigger value={LogType.AlsaControls}>Alsa Controls</TabsTrigger>
+          )}
+          {apsServerLog.length > 0 && (
+            <TabsTrigger value={LogType.ApsServer}>APS Server Log</TabsTrigger>
+          )}
+          {audioDiagnosticsLog.length > 0 && (
+            <TabsTrigger value={LogType.AudioDiagnostics}>Audio Diagnostics Log</TabsTrigger>
+          )}
+          {bluetoothLog.length > 0 && (
+            <TabsTrigger value={LogType.BluetoothLog}>Bluetooth Log</TabsTrigger>
+          )}
+          {clobberStateLog.length > 0 && (
+            <TabsTrigger value={LogType.ClobberState}>Clobber State Log</TabsTrigger>
+          )}
         </TabsList>
         <ChromeUserLog logType={LogType.ChromeUserLog} />
         <ChromeUserLog logType={LogType.ChromePreviousUserLog} />
         <ChromeUserLog logType={LogType.ChromeSystemLog} />
         <ChromeUserLog logType={LogType.ChromePreviousSystemLog} />
+        <PlainText logType={LogType.LoginTimes} text={loginTimes.join("\n")} />
+        <PlainText logType={LogType.AlsaControls} text={alsaControls.join("\n")} />
+        <ChromeUserLog logType={LogType.ApsServer} />
+        <PlainText logType={LogType.AudioDiagnostics} text={audioDiagnosticsLog.join("\n")} />
+        <ChromeUserLog logType={LogType.BluetoothLog} />
+        <ChromeUserLog logType={LogType.ClobberState} />
       </Tabs>
     </div>
   );
