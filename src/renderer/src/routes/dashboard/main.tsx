@@ -9,43 +9,13 @@ export const Route = createFileRoute("/dashboard/main")({
 
 function RouteComponent() {
   return (
-    <div className="w-full h-full overflow-hidden p-4">
+    <div className="w-full h-[calc(100vh-100px)] scrollbar-container overflow-hidden p-4">
       <Tabs defaultValue={LogType.ChromeUserLog} orientation="vertical">
-        <TabsList className="h-[calc(100vh-64px)] scrollbar-container flex-col w-40 justify-start">
+        <TabsList className="h-[calc(100vh-140px)] scrollbar-container flex-col w-40 justify-start">
           <TabsTrigger value={LogType.ChromeUserLog}>Chrome User Log</TabsTrigger>
-          <TabsTrigger value="placeholder">PlaceHolder</TabsTrigger>
-          <TabsTrigger value="placeholder">PlaceHolder</TabsTrigger>
-
-          <TabsTrigger value="placeholder">PlaceHolder</TabsTrigger>
-
-          <TabsTrigger value="placeholder">PlaceHolder</TabsTrigger>
-
-          <TabsTrigger value="placeholder">PlaceHolder</TabsTrigger>
-
-          <TabsTrigger value="placeholder">PlaceHolder</TabsTrigger>
-          <TabsTrigger value="placeholder">PlaceHolder</TabsTrigger>
-          <TabsTrigger value="placeholder">PlaceHolder</TabsTrigger>
-          <TabsTrigger value="placeholder">PlaceHolder</TabsTrigger>
-          <TabsTrigger value="placeholder">PlaceHolder</TabsTrigger>
-          <TabsTrigger value="placeholder">PlaceHolder</TabsTrigger>
-          <TabsTrigger value="placeholder">PlaceHolder</TabsTrigger>
-          <TabsTrigger value="placeholder">PlaceHolder</TabsTrigger>
-          <TabsTrigger value="placeholder">PlaceHolder</TabsTrigger>
-          <TabsTrigger value="placeholder">PlaceHolder</TabsTrigger>
-          <TabsTrigger value="placeholder">PlaceHolder</TabsTrigger>
-          <TabsTrigger value="placeholder">PlaceHolder</TabsTrigger>
-          <TabsTrigger value="placeholder">PlaceHolder</TabsTrigger>
-          <TabsTrigger value="placeholder">PlaceHolder</TabsTrigger>
-          <TabsTrigger value="placeholder">PlaceHolder</TabsTrigger>
-          <TabsTrigger value="placeholder">PlaceHolder</TabsTrigger>
-          <TabsTrigger value="placeholder">PlaceHolder</TabsTrigger>
-          <TabsTrigger value="placeholder">PlaceHolder</TabsTrigger>
-          <TabsTrigger value="placeholder">PlaceHolder</TabsTrigger>
-          <TabsTrigger value="placeholder">PlaceHolder</TabsTrigger>
-          <TabsTrigger value="placeholder">PlaceHolder</TabsTrigger>
+          
         </TabsList>
         <ChromeUserLog />
-        <TabsContent value="placeholder">placeholder</TabsContent>
       </Tabs>
     </div>
   );

@@ -1,3 +1,4 @@
+import { IUserLog } from "./typings";
 import { Board, DeviceInfo } from "./typings/device";
 
 export const parseDeviceInfo = (content: string): DeviceInfo => {
@@ -27,7 +28,7 @@ export const parseDeviceInfo = (content: string): DeviceInfo => {
   };
 };
 
-export const parseChromeUserLog = (content: string): string[] => {
+export const parseChromeUserLog = (content: string): IUserLog[] => {
   // Matches:
   // Profile[0] chrome_user_log=<multiline>
   // ---------- START ----------
@@ -38,5 +39,57 @@ export const parseChromeUserLog = (content: string): string[] => {
   const match = content.match(regex);
 
   const logString = match && match[1] ? match[1].trim() : "";
-  return logString.split("\n");
+  const lines = logString.split("\n");
+
+  // Parse each line into IUserLog entries
+  const logs: IUserLog[] = lines
+    .map((line) => {
+      line = line.trim();
+      if (!line) return null;
+
+      // Example log line format:
+      // 2026-01-13T17:10:20.704235Z ERROR chrome[1073:1073]: [source] message
+      // Use non-greedy match for process part to stop at the first ": " separator
+      const logRegex = /^(\S+)\s+(\w+)\s+(.*?):\s+(.*)$/;
+      const logMatch = line.match(logRegex);
+
+      if (logMatch) {
+        let level = "INFO";
+        const rawLevel = logMatch[2];
+
+        if (rawLevel === "ERROR") level = "ERROR";
+        else if (rawLevel === "WARNING") level = "WARN";
+        else if (rawLevel.startsWith("VERBOSE")) level = "DEBUG";
+
+        let source = "";
+        let message = logMatch[4];
+
+        // Try to splice source from message if it matches [source] ...
+        const sourceMatch = message.match(/^\[(.*?)\]\s+(.*)$/);
+        if (sourceMatch) {
+          source = sourceMatch[1].replace(/(?:\.\.\/)+.*?\/src\//g, "");
+          message = sourceMatch[2];
+        }
+
+        return {
+          timestamp: logMatch[1],
+          level: level as "INFO" | "WARN" | "ERROR" | "DEBUG",
+          process: logMatch[3],
+          source,
+          message
+        };
+      } else {
+        // If line doesn't match expected format, return as INFO with raw message
+        return {
+          timestamp: "",
+          level: "INFO",
+          process: "",
+          source: "",
+          message: line
+        };
+      }
+    })
+    .filter((log): log is IUserLog => log !== null);
+
+  return logs;
 };
