@@ -11,7 +11,7 @@ import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { TabsContent } from "@renderer/components/ui/tabs";
 import { IUserLog } from "@renderer/lib/typings";
 import { cn } from "@renderer/lib/utils";
-import { useMemo, useState, useEffect, useRef, ReactNode } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { Virtuoso, VirtuosoHandle } from "react-virtuoso";
 import {
   Collapsible,
@@ -19,6 +19,7 @@ import {
   CollapsibleContent
 } from "@renderer/components/ui/collapsible";
 import { Badge } from "@renderer/components/ui/badge";
+import { HighlightedText } from "./highlighted-text";
 
 const LogLevelMap: Record<string, string> = {
   ERROR: "text-red-500",
@@ -155,55 +156,6 @@ const GroupedLogItem = ({
       </CollapsibleContent>
     </Collapsible>
   );
-};
-
-// Helper to highlight text
-const HighlightedText = ({
-  text,
-  query,
-  isRegex
-}: {
-  text: string;
-  query: string;
-  isRegex: boolean;
-}) => {
-  if (!query || !text) return <span>{text}</span>;
-
-  try {
-    const effectiveQuery = isRegex ? query : query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const re = new RegExp(effectiveQuery, "gi");
-
-    const elements: ReactNode[] = [];
-    let lastIndex = 0;
-    let match;
-
-    while ((match = re.exec(text)) !== null) {
-      if (match.index > lastIndex) {
-        elements.push(
-          <span key={`text-${lastIndex}`}>{text.substring(lastIndex, match.index)}</span>
-        );
-      }
-      elements.push(
-        <span key={`match-${match.index}`} className="bg-yellow-500/50 text-black">
-          {match[0]}
-        </span>
-      );
-      lastIndex = re.lastIndex;
-      if (re.lastIndex === match.index) {
-        re.lastIndex++; // Avoid infinite loop for zero-width assertions
-      }
-    }
-
-    if (lastIndex < text.length) {
-      elements.push(<span key={`text-${lastIndex}`}>{text.substring(lastIndex)}</span>);
-    }
-
-    if (elements.length === 0) return <span>{text}</span>;
-
-    return <span>{elements}</span>;
-  } catch {
-    return <span>{text}</span>;
-  }
 };
 
 const ChromeUserLogInner = ({ logKey }: { logKey: string }) => {
