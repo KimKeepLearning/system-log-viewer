@@ -1,9 +1,9 @@
 {
   "name": "system-log-viewer",
   "version": "1.0.0",
-  "description": "An Electron application with React and TypeScript",
+  "description": "View chrome system logs easily",
   "main": "./out/main/index.js",
-  "author": "example.com",
+  "author": "yennefer@vibe.us",
   "homepage": "https://electron-vite.org",
   "scripts": {
     "format": "prettier --write .",
