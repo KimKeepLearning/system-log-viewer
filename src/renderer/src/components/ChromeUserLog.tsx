@@ -4,8 +4,7 @@ import { TabsContent } from "@renderer/components/ui/tabs";
 import { IUserLog } from "@renderer/lib/typings";
 import { cn } from "@renderer/lib/utils";
 import { useMemo, useState } from "react";
-import { List, useDynamicRowHeight } from "react-window";
-import { AutoSizer } from "react-virtualized-auto-sizer";
+import { Virtuoso } from "react-virtuoso";
 import {
   Collapsible,
   CollapsibleTrigger,
@@ -17,7 +16,14 @@ const LogLevelMap: Record<string, string> = {
   ERROR: "text-red-500",
   WARN: "text-yellow-500",
   DEBUG: "text-gray-500",
-  INFO: "text-blue-500"
+  INFO: "text-blue-500",
+  VERBOSE: "text-gray-400"
+};
+
+const getLevelColor = (level?: string) => {
+  if (!level) return "text-gray-500";
+  const normalized = level.toUpperCase().trim();
+  return LogLevelMap[normalized] || "text-gray-500";
 };
 
 interface LogGroup {
@@ -27,57 +33,113 @@ interface LogGroup {
 }
 
 interface LogRowProps {
-  groupedLogs: LogGroup[];
-  expandedIndices: Record<number, boolean>;
-  toggleGroup: (index: number) => void;
-}
-
-const LogRow = ({
-  log,
-  isMain = true,
-  style
-}: {
   log: IUserLog;
   isMain?: boolean;
-  style?: React.CSSProperties;
-}) => (
+}
+
+const LogRow = ({ log, isMain = true }: LogRowProps) => (
   <div
-    style={style}
     className={cn(
-      "text-text-primary font-mono text-xs flex gap-2 py-0.5 border-b border-border/50 last:border-0 hover:bg-fill-component-navigation group",
+      "text-text-primary font-mono text-xs flex gap-2 py-1 border-b border-border/50 last:border-0 hover:bg-fill-component-navigation group items-start min-h-7.5",
       !isMain && "pl-8 bg-muted/20"
     )}
   >
-    {!isMain && <>&gt;</>}
+    {!isMain && <div className="pt-0.5">&gt;</div>}
     {log.level && (
-      <span className={cn("shrink-0 w-12 font-bold text-center", LogLevelMap[log.level])}>
+      <span className={cn("shrink-0 w-12 font-bold text-center pt-0.5", getLevelColor(log.level))}>
         {log.level}
       </span>
     )}
     {log.process && (
       <span
-        className="text-muted-foreground shrink-0 w-32 truncate text-right mr-2"
+        className="text-muted-foreground shrink-0 w-32 truncate text-right mr-2 pt-0.5"
         title={log.process}
       >
         {log.process}
       </span>
     )}
     {log.timestamp && (
-      <span className="text-muted-foreground shrink-0 min-w-[180px]">{log.timestamp}</span>
+      <span className="text-muted-foreground shrink-0 min-w-45 pt-0.5">{log.timestamp}</span>
     )}
-    <span className="whitespace-pre-wrap break-all flex-1 text-text-secondary">
-      {log.source && <span className="text-muted-foreground mr-1">[{log.source}]</span>}
-      <span className="text-text-primary font-medium">
-        <b>{log.message}</b>
-      </span>
+    <span className="flex-1 text-text-secondary min-w-0">
+      <div className="whitespace-pre-wrap break-all">
+        {log.source && (
+          <span className="text-muted-foreground mr-1 select-text">[{log.source}]</span>
+        )}
+        <span className="text-text-primary font-medium select-text">
+          <b>{log.message}</b>
+        </span>
+      </div>
     </span>
   </div>
 );
 
+const GroupedLogItem = ({
+  group,
+  isExpanded,
+  toggleGroup
+}: {
+  group: LogGroup;
+  isExpanded: boolean;
+  toggleGroup: () => void;
+}) => {
+  if (group.count === 1) {
+    return <LogRow log={group.main} />;
+  }
+
+  return (
+    <Collapsible open={isExpanded} onOpenChange={toggleGroup}>
+      <div className="text-text-primary font-mono text-xs flex gap-2 py-1 border-b border-border/50 last:border-0 hover:bg-fill-component-navigation group items-start min-h-7.5">
+        <span
+          className={cn(
+            "shrink-0 w-12 font-bold text-center pt-0.5",
+            getLevelColor(group.main.level)
+          )}
+        >
+          {group.main.level}
+        </span>
+        <span
+          className="text-muted-foreground shrink-0 w-32 truncate text-right mr-2 pt-0.5"
+          title={group.main.process}
+        >
+          {group.main.process}
+        </span>
+        <span className="text-muted-foreground shrink-0 min-w-45 pt-0.5">
+          {group.main.timestamp}
+        </span>
+        <span className="flex-1 text-text-secondary min-w-0 flex items-start">
+          <div className="flex-1 whitespace-pre-wrap break-all">
+            {group.main.source && (
+              <span className="text-muted-foreground mr-1 select-text">
+                [{group.main.source}]
+              </span>
+            )}
+            <span className="text-text-primary font-medium select-text">
+              <b>{group.main.message}</b>
+            </span>
+            <CollapsibleTrigger asChild>
+              <Badge
+                variant="secondary"
+                className="ml-2 cursor-pointer h-5 px-1.5 min-w-8 justify-center bg-fill-interaction-secondary hover:bg-fill-interaction-secondary-hover inline-flex align-middle"
+              >
+                x{group.count}
+              </Badge>
+            </CollapsibleTrigger>
+          </div>
+        </span>
+      </div>
+      <CollapsibleContent>
+        {group.children.map((child, idx) => (
+          <LogRow key={idx} log={child} isMain={false} />
+        ))}
+      </CollapsibleContent>
+    </Collapsible>
+  );
+};
+
 const ChromeUserLogInner = ({ logKey }: { logKey: string }) => {
   const parsedLogsMap = useAtomValue(parsedLogsMapAtom);
 
-  // Directly access the logs from the map using the key
   const logs = useMemo(() => {
     return parsedLogsMap[logKey] || [];
   }, [parsedLogsMap, logKey]);
@@ -110,113 +172,27 @@ const ChromeUserLogInner = ({ logKey }: { logKey: string }) => {
     return groups;
   }, [logs]);
 
-  const dynamicRowHeight = useDynamicRowHeight({
-    defaultRowHeight: 30,
-    key: logKey
-  });
-
   const [expandedIndices, setExpandedIndices] = useState<Record<number, boolean>>({});
 
   const toggleGroup = (index: number) => {
-    const isExpanded = !expandedIndices[index];
     setExpandedIndices((prev) => ({
       ...prev,
-      [index]: isExpanded
+      [index]: !prev[index]
     }));
-
-    const group = groupedLogs[index];
-    let newHeight = 30;
-    if (group.count > 1 && isExpanded) {
-      newHeight = 30 + group.children.length * 30;
-    }
-    dynamicRowHeight.setRowHeight(index, newHeight);
-  };
-
-  const Row = ({
-    index,
-    style,
-    groupedLogs: groupedLogsProp,
-    expandedIndices: expandedIndicesProp,
-    toggleGroup: toggleGroupProp
-  }: {
-    index: number;
-    style: React.CSSProperties;
-  } & LogRowProps) => {
-    const group = groupedLogsProp[index];
-    const isExpanded = expandedIndicesProp[index];
-
-    return (
-      <div style={style}>
-        {group.count === 1 ? (
-          <LogRow log={group.main} />
-        ) : (
-          <Collapsible open={isExpanded} onOpenChange={() => toggleGroupProp(index)}>
-            <div className="flex items-center gap-1 border-b border-border/50 hover:bg-fill-component-navigation h-7.5">
-              <div className="flex-1 min-w-0">
-                <div className="text-text-primary font-mono text-xs flex gap-2 py-0.5 last:border-0 items-center">
-                  <span className={cn("shrink-0 w-12 font-bold text-center")}>
-                    {group.main.level}
-                  </span>
-                  <span
-                    className="text-muted-foreground shrink-0 w-32 truncate text-right mr-2"
-                    title={group.main.process}
-                  >
-                    {group.main.process}
-                  </span>
-                  <span className="text-muted-foreground shrink-0 min-w-45">
-                    {group.main.timestamp}
-                  </span>
-                  <span className="whitespace-pre-wrap break-all flex-1 text-text-secondary flex items-center">
-                    {group.main.source && (
-                      <span className="text-muted-foreground mr-1">[{group.main.source}]</span>
-                    )}
-                    <span className="text-text-primary font-medium truncate">
-                      <b>{group.main.message}</b>
-                    </span>
-                    <CollapsibleTrigger asChild>
-                      <Badge
-                        variant="secondary"
-                        className="ml-1 cursor-pointer h-5 px-1.5 min-w-8 justify-center bg-fill-interaction-secondary"
-                      >
-                        x{group.count}
-                      </Badge>
-                    </CollapsibleTrigger>
-                  </span>
-                </div>
-              </div>
-            </div>
-            <CollapsibleContent>
-              {group.children.map((child, idx) => (
-                <div key={idx} className="h-7.5 w-full border-b border-border/50">
-                  <LogRow log={child} isMain={false} />
-                </div>
-              ))}
-            </CollapsibleContent>
-          </Collapsible>
-        )}
-      </div>
-    );
   };
 
   return (
-    <TabsContent value={logKey} className="h-[calc(100vh-140px)]">
-      <AutoSizer
-        renderProp={({ height, width }) => {
-          if (!height || !width) {
-            return null;
-          }
-          return (
-            <List<LogRowProps>
-              className="scrollbar-container"
-              style={{ height, width, overflowX: "hidden" }}
-              rowCount={groupedLogs.length}
-              rowHeight={dynamicRowHeight}
-              overscanCount={5}
-              rowProps={{ groupedLogs, expandedIndices, toggleGroup }}
-              rowComponent={Row}
-            />
-          );
-        }}
+    <TabsContent value={logKey} className="h-[calc(100vh-140px)] flex flex-col">
+      <Virtuoso
+        style={{ height: "100%", width: "100%" }}
+        totalCount={groupedLogs.length}
+        itemContent={(index) => (
+          <GroupedLogItem
+            group={groupedLogs[index]}
+            isExpanded={!!expandedIndices[index]}
+            toggleGroup={() => toggleGroup(index)}
+          />
+        )}
       />
     </TabsContent>
   );
