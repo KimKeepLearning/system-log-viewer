@@ -105,7 +105,7 @@ const parseCrasAtlogLine = (line: string): IUserLog | null => {
 
   return {
     timestamp: match[1],
-    level: "INFO",
+    level: "",
     process: match[2],
     source: "",
     message: match[3]
@@ -144,4 +144,31 @@ export const parseLogSection = (content: string, key: string): IUserLog[] => {
     .map((line) => line.trim())
     .filter((line) => line.length > 0)
     .map(parseLogLine);
+};
+
+export const parseAllLogSections = (content: string): Record<string, IUserLog[]> => {
+  const result: Record<string, IUserLog[]> = {};
+
+  // Regex to match "key=<multiline> ... START ... content ... END"
+  // Captures group 1: key
+  // Captures group 2: content
+  // Note: We use [^=\n]+ to capture keys that might contain spaces
+  const sectionRegex =
+    /(?:Profile\[0\]\s+)?([^=\n]+)=<multiline>[\s\S]*?-+\s*START\s*-+\s*([\s\S]*?)\s*-+\s*END\s*-+/g;
+
+  let match;
+  while ((match = sectionRegex.exec(content)) !== null) {
+    const key = match[1].trim();
+    const rawContent = match[2];
+
+    const lines = rawContent.split("\n");
+    const parsedLogs = lines
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)
+      .map(parseLogLine);
+
+    result[key] = parsedLogs;
+  }
+
+  return result;
 };

@@ -1,16 +1,7 @@
-import {
-  chromeUserLogAtom,
-  chromePreviousUserLogAtom,
-  chromeSystemLogAtom,
-  chromePreviousSystemLogAtom,
-  apsServerLogAtom,
-  bluetoothLogAtom,
-  clobberStateAtom,
-  audioDiagnosticsLogAtom
-} from "@renderer/lib/atom";
+import { parsedLogsMapAtom } from "@renderer/lib/atom";
 import { useAtomValue } from "jotai";
 import { TabsContent } from "@renderer/components/ui/tabs";
-import { LogType, IUserLog } from "@renderer/lib/typings";
+import { IUserLog } from "@renderer/lib/typings";
 import { cn } from "@renderer/lib/utils";
 import { useMemo, useState } from "react";
 import { List, useDynamicRowHeight } from "react-window";
@@ -83,48 +74,13 @@ const LogRow = ({
   </div>
 );
 
-const ChromeUserLogInner = ({ logType }: { logType: LogType }) => {
-  const chromeUserLog = useAtomValue(chromeUserLogAtom);
-  const chromePreviousUserLog = useAtomValue(chromePreviousUserLogAtom);
-  const chromeSystemLog = useAtomValue(chromeSystemLogAtom);
-  const chromePreviousSystemLog = useAtomValue(chromePreviousSystemLogAtom);
-  const apsServerLog = useAtomValue(apsServerLogAtom);
-  const bluetoothLog = useAtomValue(bluetoothLogAtom);
-  const clobberStateLog = useAtomValue(clobberStateAtom);
-  const audioDiagnosticsLog = useAtomValue(audioDiagnosticsLogAtom);
+const ChromeUserLogInner = ({ logKey }: { logKey: string }) => {
+  const parsedLogsMap = useAtomValue(parsedLogsMapAtom);
 
+  // Directly access the logs from the map using the key
   const logs = useMemo(() => {
-    switch (logType) {
-      case LogType.ChromeUserLog:
-        return chromeUserLog;
-      case LogType.ChromePreviousUserLog:
-        return chromePreviousUserLog;
-      case LogType.ChromeSystemLog:
-        return chromeSystemLog;
-      case LogType.ChromePreviousSystemLog:
-        return chromePreviousSystemLog;
-      case LogType.ApsServer:
-        return apsServerLog;
-      case LogType.BluetoothLog:
-        return bluetoothLog;
-      case LogType.ClobberState:
-        return clobberStateLog;
-      case LogType.AudioDiagnostics:
-        return audioDiagnosticsLog;
-      default:
-        return [];
-    }
-  }, [
-    logType,
-    chromeUserLog,
-    chromePreviousUserLog,
-    chromeSystemLog,
-    chromePreviousSystemLog,
-    apsServerLog,
-    bluetoothLog,
-    clobberStateLog,
-    audioDiagnosticsLog
-  ]);
+    return parsedLogsMap[logKey] || [];
+  }, [parsedLogsMap, logKey]);
 
   const groupedLogs = useMemo(() => {
     if (!logs) return [];
@@ -156,7 +112,7 @@ const ChromeUserLogInner = ({ logType }: { logType: LogType }) => {
 
   const dynamicRowHeight = useDynamicRowHeight({
     defaultRowHeight: 30,
-    key: logType
+    key: logKey
   });
 
   const [expandedIndices, setExpandedIndices] = useState<Record<number, boolean>>({});
@@ -243,7 +199,7 @@ const ChromeUserLogInner = ({ logType }: { logType: LogType }) => {
   };
 
   return (
-    <TabsContent value={logType} className="h-[calc(100vh-140px)]">
+    <TabsContent value={logKey} className="h-[calc(100vh-140px)]">
       <AutoSizer
         renderProp={({ height, width }) => {
           if (!height || !width) {
@@ -266,6 +222,6 @@ const ChromeUserLogInner = ({ logType }: { logType: LogType }) => {
   );
 };
 
-export const ChromeUserLog = (props: { logType: LogType }) => {
+export const ChromeUserLog = (props: { logKey: string }) => {
   return <ChromeUserLogInner {...props} />;
 };

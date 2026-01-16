@@ -1,85 +1,46 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { TabsList, Tabs, TabsTrigger } from "@renderer/components/ui/tabs";
-import { LogType } from "@renderer/lib/typings/device";
 import { ChromeUserLog } from "@renderer/components/ChromeUserLog";
 import { useAtomValue } from "jotai";
-import {
-  chromeUserLogAtom,
-  chromePreviousUserLogAtom,
-  chromePreviousSystemLogAtom,
-  chromeSystemLogAtom,
-  loginTimesAtom,
-  alsaControlsAtom,
-  apsServerLogAtom,
-  audioDiagnosticsLogAtom,
-  bluetoothLogAtom,
-  clobberStateAtom
-} from "@renderer/lib/atom";
-import { PlainText } from "@renderer/components/PlainText";
+import { logKeysAtom, parsedLogsMapAtom } from "@renderer/lib/atom";
+
 export const Route = createFileRoute("/dashboard/main")({
   component: RouteComponent
 });
 
 function RouteComponent() {
-  const chromeUserLog = useAtomValue(chromeUserLogAtom);
-  const chromePreviousUserLog = useAtomValue(chromePreviousUserLogAtom);
-  const chromeSystemLog = useAtomValue(chromeSystemLogAtom);
-  const chromePreviousSystemLog = useAtomValue(chromePreviousSystemLogAtom);
-  const loginTimes = useAtomValue(loginTimesAtom);
-  const alsaControls = useAtomValue(alsaControlsAtom);
-  const apsServerLog = useAtomValue(apsServerLogAtom);
-  const audioDiagnosticsLog = useAtomValue(audioDiagnosticsLogAtom);
-  const bluetoothLog = useAtomValue(bluetoothLogAtom);
-  const clobberStateLog = useAtomValue(clobberStateAtom);
+  const logKeys = useAtomValue(logKeysAtom);
+  const parsedLogs = useAtomValue(parsedLogsMapAtom);
+
+  if (logKeys.length === 0) {
+    return <div className="p-4">No logs found. Please open a log file.</div>;
+  }
+
   return (
     <div className="w-full h-[calc(100vh-100px)] scrollbar-container overflow-hidden p-4">
-      <Tabs defaultValue={LogType.ChromeUserLog} orientation="vertical">
+      <Tabs defaultValue={logKeys[0]} orientation="vertical">
         <TabsList className="h-[calc(100vh-140px)] scrollbar-container flex-col w-40 justify-start">
-          {chromeUserLog.length > 0 && (
-            <TabsTrigger value={LogType.ChromeUserLog}>Chrome User Log</TabsTrigger>
-          )}
-          {chromePreviousUserLog.length > 0 && (
-            <TabsTrigger value={LogType.ChromePreviousUserLog}>
-              Chrome User Log(Previous)
-            </TabsTrigger>
-          )}
-          {chromeSystemLog.length > 0 && (
-            <TabsTrigger value={LogType.ChromeSystemLog}>Chrome System Log</TabsTrigger>
-          )}
-          {chromePreviousSystemLog.length > 0 && (
-            <TabsTrigger value={LogType.ChromePreviousSystemLog}>
-              Chrome System Log(Previous)
-            </TabsTrigger>
-          )}
-          {loginTimes.length > 0 && (
-            <TabsTrigger value={LogType.LoginTimes}>Login Times</TabsTrigger>
-          )}
-          {alsaControls.length > 0 && (
-            <TabsTrigger value={LogType.AlsaControls}>Alsa Controls</TabsTrigger>
-          )}
-          {apsServerLog.length > 0 && (
-            <TabsTrigger value={LogType.ApsServer}>APS Server Log</TabsTrigger>
-          )}
-          {audioDiagnosticsLog.length > 0 && (
-            <TabsTrigger value={LogType.AudioDiagnostics}>Audio Diagnostics Log</TabsTrigger>
-          )}
-          {bluetoothLog.length > 0 && (
-            <TabsTrigger value={LogType.BluetoothLog}>Bluetooth Log</TabsTrigger>
-          )}
-          {clobberStateLog.length > 0 && (
-            <TabsTrigger value={LogType.ClobberState}>Clobber State Log</TabsTrigger>
-          )}
+          {logKeys.map((key) => {
+            const logs = parsedLogs[key];
+            if (!logs || logs.length === 0) return null;
+            return (
+              <TabsTrigger
+                key={key}
+                value={key}
+                className="w-full h-auto whitespace-normal text-left justify-start break-words py-2 my-0.5 shrink-0"
+                title={key}
+              >
+                {key}
+              </TabsTrigger>
+            );
+          })}
         </TabsList>
-        <ChromeUserLog logType={LogType.ChromeUserLog} />
-        <ChromeUserLog logType={LogType.ChromePreviousUserLog} />
-        <ChromeUserLog logType={LogType.ChromeSystemLog} />
-        <ChromeUserLog logType={LogType.ChromePreviousSystemLog} />
-        <PlainText logType={LogType.LoginTimes} text={loginTimes.join("\n")} />
-        <PlainText logType={LogType.AlsaControls} text={alsaControls.join("\n")} />
-        <ChromeUserLog logType={LogType.ApsServer} />
-        <ChromeUserLog logType={LogType.AudioDiagnostics} />
-        <ChromeUserLog logType={LogType.BluetoothLog} />
-        <ChromeUserLog logType={LogType.ClobberState} />
+
+        {logKeys.map((key) => {
+          const logs = parsedLogs[key];
+          if (!logs || logs.length === 0) return null;
+          return <ChromeUserLog key={key} logKey={key} />;
+        })}
       </Tabs>
     </div>
   );
