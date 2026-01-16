@@ -1,7 +1,7 @@
 export interface IUserLog {
-  timestamp: string;
-  level: "INFO" | "WARN" | "ERROR" | "DEBUG";
+  timestamp?: string;
+  level?: "INFO" | "WARN" | "ERROR" | "DEBUG";
   message: string;
-  process: string;
-  source: string;
+  process?: string;
+  source?: string;
 }

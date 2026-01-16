@@ -104,6 +104,9 @@ importers:
       '@tanstack/react-router':
         specifier: ^1.114.29
         version: 1.114.29(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@types/react-virtualized-auto-sizer':
+        specifier: ^1.0.8
+        version: 1.0.8(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       '@vibeus/ui':
         specifier: ^1.5.4
         version: 1.9.0(@emotion/is-prop-valid@1.4.0)(@types/react-dom@19.0.4(@types/react@19.0.12))(@types/react@19.0.12)(embla-carousel@8.5.2)(react-dom@19.1.0(react@19.1.0))(react-hook-form@7.55.0(react@19.1.0))(react@19.1.0)(typescript@5.8.2)
@@ -152,6 +155,12 @@ importers:
       react-resizable-panels:
         specifier: ^2.1.7
         version: 2.1.7(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      react-virtualized-auto-sizer:
+        specifier: ^2.0.2
+        version: 2.0.2(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      react-window:
+        specifier: ^2.2.5
+        version: 2.2.5(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       recharts:
         specifier: ^2.15.1
         version: 2.15.1(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
@@ -198,6 +207,9 @@ importers:
       '@types/react-dom':
         specifier: ^19.0.4
         version: 19.0.4(@types/react@19.0.12)
+      '@types/react-window':
+        specifier: ^2.0.0
+        version: 2.0.0(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       '@vitejs/plugin-react':
         specifier: ^4.3.4
         version: 4.3.4(vite@6.2.3(@types/node@22.13.14)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.19.3))
@@ -2649,6 +2661,14 @@ packages:
     peerDependencies:
       '@types/react': '*'
 
+  '@types/react-virtualized-auto-sizer@1.0.8':
+    resolution: {integrity: sha512-keJpNyhiwfl2+N12G1ocCVA5ZDBArbPLe/S90X3kt7fam9naeHdaYYWbpe2sHczp70JWJ+2QLhBE8kLvLuVNjA==}
+    deprecated: This is a stub types definition. react-virtualized-auto-sizer provides its own type definitions, so you do not need this installed.
+
+  '@types/react-window@2.0.0':
+    resolution: {integrity: sha512-E8hMDtImEpMk1SjswSvqoSmYvk7GEtyVaTa/GJV++FdDNuMVVEzpAClyJ0nqeKYBrMkGiyH6M1+rPLM0Nu1exQ==}
+    deprecated: This is a stub types definition. react-window provides its own type definitions, so you do not need this installed.
+
   '@types/react@19.0.12':
     resolution: {integrity: sha512-V6Ar115dBDrjbtXSrS+/Oruobc+qVbbUxDFC1RSbRqLt5SYvxxyIDrSC85RWml54g+jfNeEMZhEj7wW07ONQhA==}
 
@@ -4695,6 +4715,18 @@ packages:
     peerDependencies:
       react: '>=16.6.0'
       react-dom: '>=16.6.0'
+
+  react-virtualized-auto-sizer@2.0.2:
+    resolution: {integrity: sha512-FvnVDed3nn7Xt2m2ioo+O1VBpP1uMIl8ygtpkzfhYoRb1e06on6hp2DEBg9AquCXqtP1bhgVT4lS+xpBwrXq7Q==}
+    peerDependencies:
+      react: ^18.0.0 || ^19.0.0
+      react-dom: ^18.0.0 || ^19.0.0
+
+  react-window@2.2.5:
+    resolution: {integrity: sha512-6viWvPSZvVuMIe9hrl4IIZoVfO/npiqOb03m4Z9w+VihmVzBbiudUrtUqDpsWdKvd/Ai31TCR25CBcFFAUm28w==}
+    peerDependencies:
+      react: ^18.0.0 || ^19.0.0
+      react-dom: ^18.0.0 || ^19.0.0
 
   react@19.1.0:
     resolution: {integrity: sha512-FS+XFBNvn3GTAWq26joslQgWNoFu08F4kl0J4CgdNKADkdSGXQyTCnKteIAJy96Br6YbpEU1LSzV5dYtjMkMDg==}
@@ -7869,6 +7901,20 @@ snapshots:
     dependencies:
       '@types/react': 19.0.12
 
+  '@types/react-virtualized-auto-sizer@1.0.8(react-dom@19.1.0(react@19.1.0))(react@19.1.0)':
+    dependencies:
+      react-virtualized-auto-sizer: 2.0.2(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+    transitivePeerDependencies:
+      - react
+      - react-dom
+
+  '@types/react-window@2.0.0(react-dom@19.1.0(react@19.1.0))(react@19.1.0)':
+    dependencies:
+      react-window: 2.2.5(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+    transitivePeerDependencies:
+      - react
+      - react-dom
+
   '@types/react@19.0.12':
     dependencies:
       csstype: 3.1.3
@@ -10361,6 +10407,16 @@ snapshots:
       dom-helpers: 5.2.1
       loose-envify: 1.4.0
       prop-types: 15.8.1
+      react: 19.1.0
+      react-dom: 19.1.0(react@19.1.0)
+
+  react-virtualized-auto-sizer@2.0.2(react-dom@19.1.0(react@19.1.0))(react@19.1.0):
+    dependencies:
+      react: 19.1.0
+      react-dom: 19.1.0(react@19.1.0)
+
+  react-window@2.2.5(react-dom@19.1.0(react@19.1.0))(react@19.1.0):
+    dependencies:
       react: 19.1.0
       react-dom: 19.1.0(react@19.1.0)
 

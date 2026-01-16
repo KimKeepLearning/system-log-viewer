@@ -77,7 +77,7 @@ function RouteComponent() {
         <PlainText logType={LogType.LoginTimes} text={loginTimes.join("\n")} />
         <PlainText logType={LogType.AlsaControls} text={alsaControls.join("\n")} />
         <ChromeUserLog logType={LogType.ApsServer} />
-        <PlainText logType={LogType.AudioDiagnostics} text={audioDiagnosticsLog.join("\n")} />
+        <ChromeUserLog logType={LogType.AudioDiagnostics} />
         <ChromeUserLog logType={LogType.BluetoothLog} />
         <ChromeUserLog logType={LogType.ClobberState} />
       </Tabs>

@@ -28,70 +28,120 @@ export const parseDeviceInfo = (content: string): DeviceInfo => {
   };
 };
 
-export const parseLogSection = (content: string, key: string): IUserLog[] => {
+export const extractLogSection = (content: string, key: string): string => {
   // Matches:
   // (Profile[0] )? key=<multiline>
   // ---------- START ----------
   // ... content ...
   // ---------- END ----------
-  // We escape dots in key just in case, though usually simpler is fine.
   const escapedKey = key.replace(/\./g, "\\.");
   const regex = new RegExp(
     `(?:Profile\\[0\\]\\s+)?${escapedKey}=<multiline>[\\s\\S]*?-+\\s*START\\s*-+\\s*([\\s\\S]*?)\\s*-+\\s*END\\s*-+`
   );
   const match = content.match(regex);
-  const logString = match && match[1] ? match[1].trim() : "";
+  return match && match[1] ? match[1].trim() : "";
+};
+
+const parseStandardLogLine = (line: string): IUserLog | null => {
+  // Example: 2026-01-13T17:10:20.704235Z ERROR chrome[1073:1073]: [source] message
+  const logRegex = /^(\S+)\s+(\w+)\s+(.*?):\s+(.*)$/;
+  const logMatch = line.match(logRegex);
+
+  if (!logMatch) return null;
+
+  let level = "INFO";
+  const rawLevel = logMatch[2];
+
+  if (rawLevel === "ERROR") level = "ERROR";
+  else if (rawLevel === "WARNING") level = "WARN";
+  else if (rawLevel.startsWith("VERBOSE")) level = "DEBUG";
+
+  let source = "";
+  let message = logMatch[4];
+
+  // Try to splice source from message if it matches [source] ...
+  const sourceMatch = message.match(/^\[(.*?)\]\s+(.*)$/);
+  if (sourceMatch) {
+    source = sourceMatch[1].replace(/(?:\.\.\/)+.*?\/src\//g, "");
+    message = sourceMatch[2];
+  }
+
+  return {
+    timestamp: logMatch[1],
+    level: level as "INFO" | "WARN" | "ERROR" | "DEBUG",
+    process: logMatch[3],
+    source,
+    message
+  };
+};
+
+const parseBracketLevelLogLine = (line: string): IUserLog | null => {
+  // Example: [WARN] some message
+  const bracketMatch = line.match(/^\[(ERROR|WARN|WARNING|INFO|DEBUG|VERBOSE)\]\s+(.*)$/);
+  if (!bracketMatch) return null;
+
+  let level = "INFO";
+  const rawLevel = bracketMatch[1];
+  if (rawLevel === "ERROR") level = "ERROR";
+  else if (rawLevel === "WARN" || rawLevel === "WARNING") level = "WARN";
+  else if (rawLevel.startsWith("VERBOSE")) level = "DEBUG";
+
+  return {
+    timestamp: "",
+    level: level as "INFO" | "WARN" | "ERROR" | "DEBUG",
+    process: "",
+    source: "",
+    message: bracketMatch[2]
+  };
+};
+
+const parseCrasAtlogLine = (line: string): IUserLog | null => {
+  // Example: 2026-01-15T17:11:47.912820765 cras atlog  READ_AUDIO_TSTAMP ...
+  // Regex matches: Timestamp, "cras atlog", Message
+  const regex = /^(\S+)\s+(cras\s+atlog)\s+(.*)$/;
+  const match = line.match(regex);
+
+  if (!match) return null;
+
+  return {
+    timestamp: match[1],
+    level: "INFO",
+    process: match[2],
+    source: "",
+    message: match[3]
+  };
+};
+
+export const parseLogLine = (line: string): IUserLog => {
+  line = line.trim();
+  if (!line) {
+    return { timestamp: "", level: "INFO", process: "", source: "", message: "" };
+  }
+
+  // Try different strategies
+  const strategies = [parseStandardLogLine, parseCrasAtlogLine, parseBracketLevelLogLine];
+
+  for (const strategy of strategies) {
+    const result = strategy(line);
+    if (result) return result;
+  }
+
+  // Fallback
+  return {
+    timestamp: "",
+    level: "",
+    process: "",
+    source: "",
+    message: line
+  };
+};
+
+export const parseLogSection = (content: string, key: string): IUserLog[] => {
+  const logString = extractLogSection(content, key);
   const lines = logString.split("\n");
 
-  // Parse each line into IUserLog entries
-  const logs: IUserLog[] = lines
-    .map((line) => {
-      line = line.trim();
-      if (!line) return null;
-
-      // Example log line format:
-      // 2026-01-13T17:10:20.704235Z ERROR chrome[1073:1073]: [source] message
-      // Use non-greedy match for process part to stop at the first ": " separator
-      const logRegex = /^(\S+)\s+(\w+)\s+(.*?):\s+(.*)$/;
-      const logMatch = line.match(logRegex);
-
-      if (logMatch) {
-        let level = "INFO";
-        const rawLevel = logMatch[2];
-
-        if (rawLevel === "ERROR") level = "ERROR";
-        else if (rawLevel === "WARNING") level = "WARN";
-        else if (rawLevel.startsWith("VERBOSE")) level = "DEBUG";
-
-        let source = "";
-        let message = logMatch[4];
-
-        // Try to splice source from message if it matches [source] ...
-        const sourceMatch = message.match(/^\[(.*?)\]\s+(.*)$/);
-        if (sourceMatch) {
-          source = sourceMatch[1].replace(/(?:\.\.\/)+.*?\/src\//g, "");
-          message = sourceMatch[2];
-        }
-
-        return {
-          timestamp: logMatch[1],
-          level: level as "INFO" | "WARN" | "ERROR" | "DEBUG",
-          process: logMatch[3],
-          source,
-          message
-        };
-      } else {
-        // If line doesn't match expected format, return as INFO with raw message
-        return {
-          timestamp: "",
-          level: "INFO",
-          process: "",
-          source: "",
-          message: line
-        };
-      }
-    })
-    .filter((log): log is IUserLog => log !== null);
-
-  return logs;
+  return lines
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .map(parseLogLine);
 };
