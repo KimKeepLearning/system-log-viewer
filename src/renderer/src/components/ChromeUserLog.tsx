@@ -1,10 +1,18 @@
-import { parsedLogsMapAtom } from "@renderer/lib/atom";
-import { useAtomValue } from "jotai";
+import {
+  parsedLogsMapAtom,
+  searchQueryAtom,
+  isRegexAtom,
+  searchMatchesCountAtom,
+  currentMatchIndexAtom,
+  activeTabAtom,
+  logKeysAtom
+} from "@renderer/lib/atom";
+import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { TabsContent } from "@renderer/components/ui/tabs";
 import { IUserLog } from "@renderer/lib/typings";
 import { cn } from "@renderer/lib/utils";
-import { useMemo, useState } from "react";
-import { Virtuoso } from "react-virtuoso";
+import { useMemo, useState, useEffect, useRef, ReactNode } from "react";
+import { Virtuoso, VirtuosoHandle } from "react-virtuoso";
 import {
   Collapsible,
   CollapsibleTrigger,
@@ -35,9 +43,11 @@ interface LogGroup {
 interface LogRowProps {
   log: IUserLog;
   isMain?: boolean;
+  query?: string;
+  isRegex?: boolean;
 }
 
-const LogRow = ({ log, isMain = true }: LogRowProps) => (
+const LogRow = ({ log, isMain = true, query = "", isRegex = false }: LogRowProps) => (
   <div
     className={cn(
       "text-text-primary font-mono text-xs flex gap-2 py-1 border-b border-border/50 last:border-0 hover:bg-fill-component-navigation group items-start min-h-7.5",
@@ -59,15 +69,19 @@ const LogRow = ({ log, isMain = true }: LogRowProps) => (
       </span>
     )}
     {log.timestamp && (
-      <span className="text-muted-foreground shrink-0 min-w-45 pt-0.5">{log.timestamp}</span>
+      <span className="text-muted-foreground shrink-0 min-w-45 pt-0.5">
+        <HighlightedText text={log.timestamp} query={query} isRegex={isRegex} />
+      </span>
     )}
     <span className="flex-1 text-text-secondary min-w-0">
       <div className="whitespace-pre-wrap break-all">
         {log.source && (
-          <span className="text-muted-foreground mr-1 select-text">[{log.source}]</span>
+          <span className="text-muted-foreground mr-1 select-text">
+            [<HighlightedText text={log.source} query={query} isRegex={isRegex} />]
+          </span>
         )}
         <span className="text-text-primary font-medium select-text">
-          <b>{log.message}</b>
+          <b><HighlightedText text={log.message} query={query} isRegex={isRegex} /></b>
         </span>
       </div>
     </span>
@@ -77,14 +91,18 @@ const LogRow = ({ log, isMain = true }: LogRowProps) => (
 const GroupedLogItem = ({
   group,
   isExpanded,
-  toggleGroup
+  toggleGroup,
+  query,
+  isRegex
 }: {
   group: LogGroup;
   isExpanded: boolean;
   toggleGroup: () => void;
+  query: string;
+  isRegex: boolean;
 }) => {
   if (group.count === 1) {
-    return <LogRow log={group.main} />;
+    return <LogRow log={group.main} query={query} isRegex={isRegex} />;
   }
 
   return (
@@ -105,17 +123,17 @@ const GroupedLogItem = ({
           {group.main.process}
         </span>
         <span className="text-muted-foreground shrink-0 min-w-45 pt-0.5">
-          {group.main.timestamp}
+          <HighlightedText text={group.main.timestamp || ""} query={query} isRegex={isRegex} />
         </span>
         <span className="flex-1 text-text-secondary min-w-0 flex items-start">
           <div className="flex-1 whitespace-pre-wrap break-all">
             {group.main.source && (
               <span className="text-muted-foreground mr-1 select-text">
-                [{group.main.source}]
+                [<HighlightedText text={group.main.source} query={query} isRegex={isRegex} />]
               </span>
             )}
             <span className="text-text-primary font-medium select-text">
-              <b>{group.main.message}</b>
+              <HighlightedText text={group.main.message} query={query} isRegex={isRegex} />
             </span>
             <CollapsibleTrigger asChild>
               <Badge
@@ -130,15 +148,77 @@ const GroupedLogItem = ({
       </div>
       <CollapsibleContent>
         {group.children.map((child, idx) => (
-          <LogRow key={idx} log={child} isMain={false} />
+          <LogRow key={idx} log={child} isMain={false} query={query} isRegex={isRegex} />
         ))}
       </CollapsibleContent>
     </Collapsible>
   );
 };
 
+// Helper to highlight text
+const HighlightedText = ({
+  text,
+  query,
+  isRegex
+}: {
+  text: string;
+  query: string;
+  isRegex: boolean;
+}) => {
+  if (!query || !text) return <span>{text}</span>;
+
+  try {
+    const effectiveQuery = isRegex
+      ? query
+      : query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const re = new RegExp(effectiveQuery, "gi");
+
+    const elements: ReactNode[] = [];
+    let lastIndex = 0;
+    let match;
+
+    while ((match = re.exec(text)) !== null) {
+      if (match.index > lastIndex) {
+        elements.push(
+          <span key={`text-${lastIndex}`}>
+            {text.substring(lastIndex, match.index)}
+          </span>
+        );
+      }
+      elements.push(
+        <span key={`match-${match.index}`} className="bg-yellow-500/50 text-black">
+          {match[0]}
+        </span>
+      );
+      lastIndex = re.lastIndex;
+      if (re.lastIndex === match.index) {
+        re.lastIndex++; // Avoid infinite loop for zero-width assertions
+      }
+    }
+
+    if (lastIndex < text.length) {
+      elements.push(
+        <span key={`text-${lastIndex}`}>{text.substring(lastIndex)}</span>
+      );
+    }
+
+    if (elements.length === 0) return <span>{text}</span>;
+
+    return <span>{elements}</span>;
+  } catch {
+    return <span>{text}</span>;
+  }
+};
+
 const ChromeUserLogInner = ({ logKey }: { logKey: string }) => {
   const parsedLogsMap = useAtomValue(parsedLogsMapAtom);
+  const query = useAtomValue(searchQueryAtom);
+  const isRegex = useAtomValue(isRegexAtom);
+  const setMatchesCount = useSetAtom(searchMatchesCountAtom);
+  const [currentMatchIndex, setCurrentMatchIndex] = useAtom(currentMatchIndexAtom);
+  const activeTabValue = useAtomValue(activeTabAtom);
+  const logKeys = useAtomValue(logKeysAtom);
+  const activeTab = activeTabValue || logKeys[0];
 
   const logs = useMemo(() => {
     return parsedLogsMap[logKey] || [];
@@ -172,7 +252,76 @@ const ChromeUserLogInner = ({ logKey }: { logKey: string }) => {
     return groups;
   }, [logs]);
 
-  const [expandedIndices, setExpandedIndices] = useState<Record<number, boolean>>({});
+  const virtuosoRef = useRef<VirtuosoHandle>(null);
+  const [matchIndices, setMatchIndices] = useState<number[]>([]);
+
+  useEffect(() => {
+    // Only update if this log is the active tab
+    if (activeTab && activeTab !== logKey) return;
+
+    if (!query) {
+      setMatchesCount(0);
+      setMatchIndices([]);
+      setCurrentMatchIndex(0);
+      return;
+    }
+
+    const indices: number[] = [];
+    try {
+      const effectiveQuery = isRegex ? query : query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const re = new RegExp(effectiveQuery, "i");
+
+      groupedLogs.forEach((group, idx) => {
+        const matchesMessage = re.test(group.main.message);
+        const matchesTimestamp =
+          group.main.timestamp && re.test(group.main.timestamp);
+        const matchesSource = group.main.source && re.test(group.main.source);
+
+        if (matchesMessage || matchesTimestamp || matchesSource) {
+          indices.push(idx);
+        }
+      });
+    } catch {
+      // Ignore invalid regex
+    }
+
+    setMatchIndices(indices);
+    setMatchesCount(indices.length);
+    // Reset index when search changes.
+    // Note: If we switch tabs, we might want to preserve the index or reset it.
+    // Here we reset it for simplicity when query changes or tab switches.
+    // To preserve, needs more complex logic or per-tab atom state.
+    setCurrentMatchIndex(0); 
+  }, [
+    groupedLogs,
+    query,
+    isRegex,
+    setMatchesCount,
+    setCurrentMatchIndex,
+    activeTab,
+    logKey
+  ]);
+
+  useEffect(() => {
+    if (activeTab && activeTab !== logKey) return;
+
+    if (
+      matchIndices.length > 0 &&
+      currentMatchIndex >= 0 &&
+      currentMatchIndex < matchIndices.length
+    ) {
+      const targetRowIndex = matchIndices[currentMatchIndex];
+      virtuosoRef.current?.scrollToIndex({
+        index: targetRowIndex,
+        align: "center",
+        behavior: "auto"
+      });
+    }
+  }, [currentMatchIndex, matchIndices, activeTab, logKey]);
+
+  const [expandedIndices, setExpandedIndices] = useState<
+    Record<number, boolean>
+  >({});
 
   const toggleGroup = (index: number) => {
     setExpandedIndices((prev) => ({
@@ -184,15 +333,25 @@ const ChromeUserLogInner = ({ logKey }: { logKey: string }) => {
   return (
     <TabsContent value={logKey} className="h-[calc(100vh-140px)] flex flex-col">
       <Virtuoso
+        ref={virtuosoRef}
         style={{ height: "100%", width: "100%" }}
         totalCount={groupedLogs.length}
-        itemContent={(index) => (
-          <GroupedLogItem
-            group={groupedLogs[index]}
-            isExpanded={!!expandedIndices[index]}
-            toggleGroup={() => toggleGroup(index)}
-          />
-        )}
+        itemContent={(index) => {
+          const isActive =
+            matchIndices.length > 0 &&
+            matchIndices[currentMatchIndex] === index;
+          return (
+            <div className={cn(isActive && "bg-status-warning-background")}>
+              <GroupedLogItem
+                group={groupedLogs[index]}
+                isExpanded={!!expandedIndices[index]}
+                toggleGroup={() => toggleGroup(index)}
+                query={query}
+                isRegex={isRegex}
+              />
+            </div>
+          );
+        }}
       />
     </TabsContent>
   );
