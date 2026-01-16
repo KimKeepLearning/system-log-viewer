@@ -41,7 +41,7 @@ function RouteComponent() {
   // Determine matches
   const matchIndices = useMemo(() => {
     if (!searchQuery) return [];
-    
+
     const indices: number[] = [];
     try {
       const effectiveQuery = isRegex

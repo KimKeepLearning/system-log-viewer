@@ -35,7 +35,7 @@ export const useSelectFile = () => {
   const handleUploadClick = () => {
     const input = document.createElement("input");
     input.type = "file";
-    input.accept = ".txt,.log";
+    input.accept = ".txt,.log,.zip";
     input.onchange = (e) => {
       const file = (e.target as HTMLInputElement).files?.[0];
       if (file) {

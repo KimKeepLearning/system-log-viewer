@@ -71,10 +71,10 @@ function RouteComponent() {
         <div className="max-w-2xl w-full flex flex-col gap-6">
           <div className="space-y-2 text-center">
             <h1 className="text-3xl font-bold tracking-tight">System Log Viewer</h1>
-            <p className="text-muted-foreground">Upload, view and analyze system logs</p>
+            <p className="text-muted-foreground">Upload and view system logs</p>
           </div>
 
-          <FileDropZone onFileSelect={handleFileSelect} accept=".txt,.log" />
+          <FileDropZone onFileSelect={handleFileSelect} accept=".txt,.log,.zip" />
           {error && <div className="text-red-600">{error}</div>}
         </div>
       </div>
