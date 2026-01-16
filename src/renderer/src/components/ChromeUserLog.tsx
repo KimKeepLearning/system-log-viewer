@@ -81,7 +81,9 @@ const LogRow = ({ log, isMain = true, query = "", isRegex = false }: LogRowProps
           </span>
         )}
         <span className="text-text-primary font-medium select-text">
-          <b><HighlightedText text={log.message} query={query} isRegex={isRegex} /></b>
+          <b>
+            <HighlightedText text={log.message} query={query} isRegex={isRegex} />
+          </b>
         </span>
       </div>
     </span>
@@ -168,9 +170,7 @@ const HighlightedText = ({
   if (!query || !text) return <span>{text}</span>;
 
   try {
-    const effectiveQuery = isRegex
-      ? query
-      : query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const effectiveQuery = isRegex ? query : query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const re = new RegExp(effectiveQuery, "gi");
 
     const elements: ReactNode[] = [];
@@ -180,9 +180,7 @@ const HighlightedText = ({
     while ((match = re.exec(text)) !== null) {
       if (match.index > lastIndex) {
         elements.push(
-          <span key={`text-${lastIndex}`}>
-            {text.substring(lastIndex, match.index)}
-          </span>
+          <span key={`text-${lastIndex}`}>{text.substring(lastIndex, match.index)}</span>
         );
       }
       elements.push(
@@ -197,9 +195,7 @@ const HighlightedText = ({
     }
 
     if (lastIndex < text.length) {
-      elements.push(
-        <span key={`text-${lastIndex}`}>{text.substring(lastIndex)}</span>
-      );
+      elements.push(<span key={`text-${lastIndex}`}>{text.substring(lastIndex)}</span>);
     }
 
     if (elements.length === 0) return <span>{text}</span>;
@@ -273,8 +269,7 @@ const ChromeUserLogInner = ({ logKey }: { logKey: string }) => {
 
       groupedLogs.forEach((group, idx) => {
         const matchesMessage = re.test(group.main.message);
-        const matchesTimestamp =
-          group.main.timestamp && re.test(group.main.timestamp);
+        const matchesTimestamp = group.main.timestamp && re.test(group.main.timestamp);
         const matchesSource = group.main.source && re.test(group.main.source);
 
         if (matchesMessage || matchesTimestamp || matchesSource) {
@@ -291,16 +286,8 @@ const ChromeUserLogInner = ({ logKey }: { logKey: string }) => {
     // Note: If we switch tabs, we might want to preserve the index or reset it.
     // Here we reset it for simplicity when query changes or tab switches.
     // To preserve, needs more complex logic or per-tab atom state.
-    setCurrentMatchIndex(0); 
-  }, [
-    groupedLogs,
-    query,
-    isRegex,
-    setMatchesCount,
-    setCurrentMatchIndex,
-    activeTab,
-    logKey
-  ]);
+    setCurrentMatchIndex(0);
+  }, [groupedLogs, query, isRegex, setMatchesCount, setCurrentMatchIndex, activeTab, logKey]);
 
   useEffect(() => {
     if (activeTab && activeTab !== logKey) return;
@@ -319,9 +306,7 @@ const ChromeUserLogInner = ({ logKey }: { logKey: string }) => {
     }
   }, [currentMatchIndex, matchIndices, activeTab, logKey]);
 
-  const [expandedIndices, setExpandedIndices] = useState<
-    Record<number, boolean>
-  >({});
+  const [expandedIndices, setExpandedIndices] = useState<Record<number, boolean>>({});
 
   const toggleGroup = (index: number) => {
     setExpandedIndices((prev) => ({
@@ -337,9 +322,7 @@ const ChromeUserLogInner = ({ logKey }: { logKey: string }) => {
         style={{ height: "100%", width: "100%" }}
         totalCount={groupedLogs.length}
         itemContent={(index) => {
-          const isActive =
-            matchIndices.length > 0 &&
-            matchIndices[currentMatchIndex] === index;
+          const isActive = matchIndices.length > 0 && matchIndices[currentMatchIndex] === index;
           return (
             <div className={cn(isActive && "bg-status-warning-background")}>
               <GroupedLogItem

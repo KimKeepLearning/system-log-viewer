@@ -78,8 +78,7 @@ function RouteComponent() {
               placeholder={isRegex ? "Regex pattern (e.g. ^Error.*)" : "Search logs..."}
               className={cn(
                 "pl-8 pr-[160px] h-8 bg-fill-background-inverse/10 border-none focus-visible:ring-1 min-w-0 flex-1",
-                !isValidRegex &&
-                  "ring-1 ring-red-500 text-red-500 focus-visible:ring-red-500"
+                !isValidRegex && "ring-1 ring-red-500 text-red-500 focus-visible:ring-red-500"
               )}
             />
 
