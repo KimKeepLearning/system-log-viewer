@@ -74,7 +74,9 @@ export function FileDropZone({ onFileSelect, accept }: FileDropZoneProps) {
       />
       <div className="flex flex-col items-center gap-2 text-center pointer-events-none">
         <UploadCloud className="h-10 w-10 text-muted-foreground" />
-        <h3 className="text-lg font-semibold">Click or drag file to this area to upload (support .txt, .zip)</h3>
+        <h3 className="text-lg font-semibold">
+          Click or drag file to this area to upload (support .txt, .zip)
+        </h3>
       </div>
     </Card>
   );
