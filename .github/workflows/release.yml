@@ -41,6 +41,9 @@ jobs:
         with:
           version: 9
 
+      - name: Setup NPM Config for GitHub Packages
+        run: echo "//npm.pkg.github.com/:_authToken=${{ secrets.GH_TOKEN }}" > ~/.npmrc
+
       - name: Install Dependencies
         run: pnpm install
 
