@@ -37,12 +37,13 @@ jobs:
         with:
           node-version: 20
           cache: 'npm'
-
-      - name: Setup NPM Config for GitHub Packages
-        run: echo "//npm.pkg.github.com/:_authToken=${{ secrets.GH_TOKEN }}" > ~/.npmrc
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@vibeus'
 
       - name: Install Dependencies
         run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GH_TOKEN }}
 
       - name: Build and Publish (Linux)
         if: matrix.os == 'ubuntu-latest'
