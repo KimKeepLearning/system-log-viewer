@@ -103,14 +103,14 @@ function RouteComponent() {
           Back
         </Button>
 
-        <div className="relative flex items-center w-[400px]">
+        <div className="relative flex items-center w-100">
           <Search className="absolute left-2 h-4 w-4 text-muted-foreground" />
           <Input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder={isRegex ? "Regex pattern (e.g. ^Error.*)" : "Search in raw log..."}
             className={cn(
-              "pl-8 pr-[160px] h-8 bg-fill-background-inverse/10 border-none focus-visible:ring-1 min-w-0 flex-1",
+              "pl-8 pr-40 h-8 bg-fill-background-inverse/10 border-none focus-visible:ring-1 min-w-0 flex-1",
               !isValidRegex && "ring-1 ring-red-500 text-red-500 focus-visible:ring-red-500"
             )}
           />

@@ -45,8 +45,8 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRouteWithChildren
   '/dashboard/main': typeof DashboardMainRoute
-  '/home': typeof HomeIndexRoute
-  '/raw': typeof RawIndexRoute
+  '/home/': typeof HomeIndexRoute
+  '/raw/': typeof RawIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -65,7 +65,7 @@ export interface FileRoutesById {
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/dashboard' | '/dashboard/main' | '/home' | '/raw'
+  fullPaths: '/' | '/dashboard' | '/dashboard/main' | '/home/' | '/raw/'
   fileRoutesByTo: FileRoutesByTo
   to: '/' | '/dashboard' | '/dashboard/main' | '/home' | '/raw'
   id: '__root__' | '/' | '/dashboard' | '/dashboard/main' | '/home/' | '/raw/'
@@ -97,14 +97,14 @@ declare module '@tanstack/react-router' {
     '/raw/': {
       id: '/raw/'
       path: '/raw'
-      fullPath: '/raw'
+      fullPath: '/raw/'
       preLoaderRoute: typeof RawIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/home/': {
       id: '/home/'
       path: '/home'
-      fullPath: '/home'
+      fullPath: '/home/'
       preLoaderRoute: typeof HomeIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
