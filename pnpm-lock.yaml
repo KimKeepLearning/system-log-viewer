@@ -17,6 +17,9 @@ importers:
       adm-zip:
         specifier: ^0.5.16
         version: 0.5.16
+      debug:
+        specifier: ^4.4.3
+        version: 4.4.3
       electron-squirrel-startup:
         specifier: ^1.0.1
         version: 1.0.1
