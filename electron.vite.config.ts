@@ -7,16 +7,25 @@ import svgr from "vite-plugin-svgr";
 
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin()]
+    plugins: [externalizeDepsPlugin()],
+    build: {
+      outDir: "dist-electron/main"
+    }
   },
   preload: {
-    plugins: [externalizeDepsPlugin()]
+    plugins: [externalizeDepsPlugin()],
+    build: {
+      outDir: "dist-electron/preload"
+    }
   },
   renderer: {
     resolve: {
       alias: {
         "@renderer": resolve("src/renderer/src")
       }
+    },
+    build: {
+      outDir: "dist-electron/renderer"
     },
     plugins: [
       TanStackRouterVite({
