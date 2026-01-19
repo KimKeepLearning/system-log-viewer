@@ -15,7 +15,7 @@ importers:
         specifier: ^4.0.0
         version: 4.0.0(electron@35.7.5)
       '@radix-ui/react-accordion':
-        specifier: ^1.2.3
+        specifier: ^1.2.12
         version: 1.2.12(@types/react-dom@19.2.3(@types/react@19.2.8))(@types/react@19.2.8)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       '@radix-ui/react-alert-dialog':
         specifier: ^1.1.6
