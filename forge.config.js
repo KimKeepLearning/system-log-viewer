@@ -3,6 +3,18 @@ const { FuseV1Options, FuseVersion } = require("@electron/fuses");
 
 module.exports = {
   out: "dist-forge",
+  publishers: [
+    {
+      name: "@electron-forge/publisher-github",
+      config: {
+        repository: {
+          owner: "KimKeepLearning",
+          name: "system-log-viewer"
+        },
+        prerelease: false
+      }
+    }
+  ],
   packagerConfig: {
     asar: true,
     // Explicitly set ignore to override .gitignore and ensure 'dist-electron' is included
@@ -59,17 +71,5 @@ module.exports = {
       [FuseV1Options.EnableEmbeddedAsarIntegrityValidation]: true,
       [FuseV1Options.OnlyLoadAppFromAsar]: true
     })
-  ],
-  publishers: [
-    {
-      name: '@electron-forge/publisher-github',
-      config: {
-        repository: {
-          owner: 'KimKeepLearning',
-          name: 'system-log-viewer'
-        },
-        prerelease: true
-      }
-    }
   ]
 };

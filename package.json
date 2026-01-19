@@ -24,7 +24,12 @@
     "make": "electron-forge make",
     "make:win": "pnpm run build && electron-forge make --platform=win32 --arch=x64",
     "make:mac": "pnpm run build && electron-forge make --platform=darwin --arch=x64",
-    "make:mac:arm": "pnpm run build && electron-forge make --platform=darwin --arch=arm64"
+    "make:mac:arm": "pnpm run build && electron-forge make --platform=darwin --arch=arm64",
+    "publish": "electron-forge publish",
+    "publish:all": "pnpm run publish:win && pnpm run publish:mac && pnpm run publish:linux",
+    "publish:win": "pnpm run build && electron-forge publish --platform=win32 --arch=x64",
+    "publish:mac": "pnpm run build && electron-forge publish --platform=darwin --arch=x64",
+    "publish:linux": "electron-forge publish --platform=linux --arch=x64"
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.1",
