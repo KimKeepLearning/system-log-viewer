@@ -45,6 +45,9 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GH_TOKEN }}
 
+      - name: Build Code
+        run: npm run build
+
       - name: Build and Publish (Linux)
         if: matrix.os == 'ubuntu-latest'
         run: npx electron-forge publish --platform=linux --arch=x64
