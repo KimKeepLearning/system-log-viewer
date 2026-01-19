@@ -4,7 +4,7 @@ import * as fs from "fs";
 import AdmZip from "adm-zip";
 import { electronApp, optimizer, is } from "@electron-toolkit/utils";
 import icon from "../../resources/icon.png?asset";
-const { updateElectronApp } = require('update-electron-app');
+const { updateElectronApp } = require("update-electron-app");
 
 updateElectronApp();
 

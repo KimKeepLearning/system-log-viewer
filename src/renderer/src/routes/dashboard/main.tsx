@@ -53,7 +53,7 @@ function RouteComponent() {
     logKeys.forEach((key) => {
       indices[key] = flatLogs.length;
       const logs = parsedLogs[key] || [];
-      
+
       for (let i = 0; i < logs.length; i++) {
         const currentHook = logs[i];
         const lastLog = flatLogs.length > indices[key] ? flatLogs[flatLogs.length - 1] : null;
