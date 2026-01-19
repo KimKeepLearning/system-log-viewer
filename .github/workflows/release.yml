@@ -36,38 +36,34 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-
-      - name: Setup PNPM
-        uses: pnpm/action-setup@v3
-        with:
-          version: 9
+          cache: 'npm'
 
       - name: Setup NPM Config for GitHub Packages
         run: echo "//npm.pkg.github.com/:_authToken=${{ secrets.GH_TOKEN }}" > ~/.npmrc
 
       - name: Install Dependencies
-        run: pnpm install
+        run: npm ci
 
       - name: Build and Publish (Linux)
         if: matrix.os == 'ubuntu-latest'
-        run: pnpm exec electron-forge publish --platform=linux --arch=x64
+        run: npx electron-forge publish --platform=linux --arch=x64
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and Publish (Windows)
         if: matrix.os == 'windows-latest'
-        run: pnpm exec electron-forge publish --platform=win32 --arch=x64
+        run: npx electron-forge publish --platform=win32 --arch=x64
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and Publish (macOS x64)
         if: matrix.os == 'macos-latest' && matrix.arch == 'x64'
-        run: pnpm exec electron-forge publish --platform=darwin --arch=x64
+        run: npx electron-forge publish --platform=darwin --arch=x64
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and Publish (macOS ARM64)
         if: matrix.os == 'macos-latest' && matrix.arch == 'arm64'
-        run: pnpm exec electron-forge publish --platform=darwin --arch=arm64
+        run: npx electron-forge publish --platform=darwin --arch=arm64
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
