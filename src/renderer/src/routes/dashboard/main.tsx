@@ -22,6 +22,8 @@ import {
   CollapsibleContent
 } from "@renderer/components/ui/collapsible";
 import { Badge } from "@renderer/components/ui/badge";
+import { Checkbox } from "@renderer/components/ui/checkbox";
+import { Label } from "@renderer/components/ui/label";
 import { ChevronRight, ChevronDown } from "lucide-react";
 
 export const Route = createFileRoute("/dashboard/main")({
@@ -46,6 +48,7 @@ function RouteComponent() {
   const [activeFile, setActiveFile] = useState<string | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [pendingScrollKey, setPendingScrollKey] = useState<string | null>(null);
+  const [isMergedView, setIsMergedView] = useState(false);
 
   const [searchQuery] = useAtom(searchQueryAtom);
   const [isRegex] = useAtom(isRegexAtom);
@@ -72,39 +75,75 @@ function RouteComponent() {
 
     // Only process sections for the selected file
     const keysToProcess = logStructure[selectedFileName] || [];
+    const logsToProcess: { key: string; log: IUserLog }[] = [];
 
-    keysToProcess.forEach((key) => {
-      indices[key] = flatLogs.length;
-      const logs = parsedLogs[key] || [];
+    if (isMergedView) {
+      keysToProcess.forEach((key) => {
+        const logs = parsedLogs[key] || [];
+        logs.forEach((log) => {
+          // Requirement: Interleave logs with identifiable timestamps into chrome logs
+          // Strategy: Discard any log that doesn't have a valid timestamp, not even a random word
+          const ts = log.timestamp ? log.timestamp.trim() : "";
+          // Heuristic: Must have length, digits, and time separators to be a "timestamp" and not just "eth0:"
+          const hasTimeStructure =
+            ts.length > 20 &&
+            /\d/.test(ts) &&
+            (ts.includes(":") || ts.includes("-") || ts.includes("."));
 
-      for (let i = 0; i < logs.length; i++) {
-        const currentHook = logs[i];
-        const lastLog = flatLogs.length > indices[key] ? flatLogs[flatLogs.length - 1] : null;
+          if (hasTimeStructure) {
+            logsToProcess.push({ key, log });
+          }
+        });
+      });
 
-        // Simple folding logic: same message, level, process
-        if (
-          lastLog &&
-          lastLog.message === currentHook.message &&
-          lastLog.level === currentHook.level &&
-          lastLog.process === currentHook.process &&
-          lastLog.sourceFile === key
-        ) {
-          lastLog.count++;
-          lastLog.duplicates.push(currentHook);
-        } else {
-          flatLogs.push({
-            ...currentHook,
-            sourceFile: key,
-            count: 1,
-            duplicates: [],
-            id: `${key}-${i}`
-          });
-        }
+      // Sort by timestamp (Ascending: Oldest to Newest)
+      logsToProcess.sort((a, b) => {
+        const tA = a.log.timestamp || "";
+        const tB = b.log.timestamp || "";
+        if (tA < tB) return -1;
+        if (tA > tB) return 1;
+        return 0;
+      });
+    } else {
+      keysToProcess.forEach((key) => {
+        const logs = parsedLogs[key] || [];
+        logs.forEach((log) => {
+          logsToProcess.push({ key, log });
+        });
+      });
+    }
+
+    for (let i = 0; i < logsToProcess.length; i++) {
+      const { key, log: currentHook } = logsToProcess[i];
+
+      if (!isMergedView && indices[key] === undefined) {
+        indices[key] = flatLogs.length;
       }
-    });
+
+      const lastLog = flatLogs.length > 0 ? flatLogs[flatLogs.length - 1] : null;
+
+      if (
+        lastLog &&
+        lastLog.message === currentHook.message &&
+        lastLog.level === currentHook.level &&
+        lastLog.process === currentHook.process &&
+        lastLog.sourceFile === key
+      ) {
+        lastLog.count++;
+        lastLog.duplicates.push(currentHook);
+      } else {
+        flatLogs.push({
+          ...currentHook,
+          sourceFile: key,
+          count: 1,
+          duplicates: [],
+          id: `${key}-${Math.random().toString(36).substr(2, 9)}`
+        });
+      }
+    }
 
     return { allLogs: flatLogs, fileIndices: indices };
-  }, [logStructure, parsedLogs, selectedFileName]);
+  }, [logStructure, parsedLogs, selectedFileName, isMergedView]);
 
   // Handle pending scroll after view update
   useEffect(() => {
@@ -296,6 +335,21 @@ function RouteComponent() {
           <Tag>Board: {deviceInfo.board}</Tag>
           <Tag>OS Version: {deviceInfo.version}</Tag>
           <Tag>ARC Status: {deviceInfo.arcStatus}</Tag>
+
+          <div className="h-4 w-px bg-border/50 mx-2" />
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="merged-view"
+              checked={isMergedView}
+              onCheckedChange={(c) => setIsMergedView(!!c)}
+            />
+            <label
+              htmlFor="merged-view"
+              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer text-text-secondary select-none"
+            >
+              Merge with timestamp
+            </label>
+          </div>
         </div>
         {allLogs.length === 0 ? (
           <div className="p-8 text-center text-muted-foreground text-sm flex flex-col items-center gap-2 mt-20">
@@ -314,7 +368,20 @@ function RouteComponent() {
               }
             }}
             className="h-[calc(100vh-140px)] scrollbar-container "
-            itemContent={(index, log) => (
+            itemContent={(index, log) => {
+              // Highlight specific logs in merged view
+              // chrome_user_log, chrome_system_log and their PREVIOUS variants
+              const sectionName = log.sourceFile.split("::").slice(1).join("::") || log.sourceFile;
+              const isPriorityLog = [
+                "chrome_user_log",
+                "chrome_user_log.PREVIOUS",
+                "chrome_user_log.PRIVIOUS", // Handle user typo if actual file has it
+                "chrome_system_log",
+                "chrome_system_log.PREVIOUS",
+                "chrome_system_log.PRIVIOUS"
+              ].includes(sectionName);
+
+              return (
               <>
                 {fileIndices[log.sourceFile] === index && (
                   <div className="bg-muted/50 px-4 py-1.5 font-bold text-xs border-b border-border/50 flex items-center gap-2 sticky top-0 z-10 backdrop-blur-sm shadow-sm">
@@ -328,11 +395,21 @@ function RouteComponent() {
                           {log.sourceFile.split("::")[0]}
                         </span>
                         <span className="opacity-40 font-light">/</span>
-                        <span>{log.sourceFile.split("::").slice(1).join("::")}</span>
+                        <span>{sectionName}</span>
                       </>
                     ) : (
                       log.sourceFile
                     )}
+                  </div>
+                )}
+                {/* Merged View Header Alternative: Show section inline if needed, or rely on row content */}
+                {isMergedView && (
+                  <div className={cn(
+                      "px-2 pt-1 text-[10px] font-mono flex items-center gap-1",
+                      isPriorityLog ? "text-primary font-bold opacity-100" : "text-muted-foreground opacity-40 scale-90 origin-left"
+                    )}>
+                    <span className={cn("w-1.5 h-1.5 rounded-full", isPriorityLog ? "bg-primary" : "bg-muted-foreground/50")}></span>
+                    {sectionName}
                   </div>
                 )}
                 {log.count > 1 ? (
@@ -340,7 +417,10 @@ function RouteComponent() {
                     open={expandedIds.has(log.id)}
                     onOpenChange={() => toggleExpand(log.id)}
                   >
-                    <div className="pl-2 flex border-b border-border/40 last:border-0 hover:bg-muted/10 transition-colors flex-col">
+                    <div className={cn(
+                        "pl-2 flex border-b border-border/40 last:border-0 transition-colors flex-col",
+                         isMergedView && isPriorityLog ? "bg-primary/5 hover:bg-primary/10 border-l-2 border-l-primary" : "hover:bg-muted/10"
+                    )}>
                       <LogRow log={log} query={searchQuery} isRegex={isRegex}>
                         <CollapsibleTrigger asChild>
                           <Badge
@@ -373,7 +453,10 @@ function RouteComponent() {
                     </div>
                   </Collapsible>
                 ) : (
-                  <div className="pl-2 flex border-b border-border/40 last:border-0 hover:bg-muted/10 transition-colors flex-col">
+                  <div className={cn(
+                        "pl-2 flex border-b border-border/40 last:border-0 transition-colors flex-col",
+                        isMergedView && isPriorityLog ? "bg-primary/5 hover:bg-primary/10 border-l-2 border-l-primary" : "hover:bg-muted/10"
+                    )}>
                     <div className="flex-1 min-w-0 flex items-start pr-2">
                       <div className="flex-1 min-w-0">
                         <LogRow log={log} query={searchQuery} isRegex={isRegex} />
@@ -382,7 +465,7 @@ function RouteComponent() {
                   </div>
                 )}
               </>
-            )}
+            )}}
           />
         )}
       </div>
