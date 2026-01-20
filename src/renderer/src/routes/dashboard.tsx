@@ -1,5 +1,4 @@
 import {
-  baseDeviceInfoAtom,
   searchQueryAtom,
   isRegexAtom,
   searchMatchesCountAtom,
@@ -21,7 +20,6 @@ export const Route = createFileRoute("/dashboard")({
 });
 
 function RouteComponent() {
-  const deviceInfo = useAtomValue(baseDeviceInfoAtom);
   const [searchQuery, setSearchQuery] = useAtom(searchQueryAtom);
   const [isRegex, setIsRegex] = useAtom(isRegexAtom);
   const matchesCount = useAtomValue(searchMatchesCountAtom);
@@ -63,12 +61,6 @@ function RouteComponent() {
           <LogoIcon className="size-size-sm" />
           <div className="text-body-bold">System Log Viewer</div>
         </div>
-        <div className="flex items-center ml-spacing-sm gap-1">
-          <Tag>Board: {deviceInfo.board}</Tag>
-          <Tag>OS Version: {deviceInfo.version}</Tag>
-          <Tag>ARC Status: {deviceInfo.arcStatus}</Tag>
-        </div>
-
         <div className="flex-1 flex justify-end mr-4 items-center gap-2">
           <div className="relative flex items-center w-100">
             <Search className="absolute left-2 h-4 w-4 text-muted-foreground" />
@@ -148,11 +140,3 @@ function RouteComponent() {
     </div>
   );
 }
-
-const Tag = ({ children }: { children: React.ReactNode }) => {
-  return (
-    <div className="text-tag text-text-secondary rounded-sm border border-stroke-divider p-1">
-      {children}
-    </div>
-  );
-};

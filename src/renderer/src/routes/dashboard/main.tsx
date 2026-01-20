@@ -7,14 +7,14 @@ import {
   searchQueryAtom,
   isRegexAtom,
   searchMatchesCountAtom,
-  currentMatchIndexAtom
+  currentMatchIndexAtom,
+  baseDeviceInfoAtom
 } from "@renderer/lib/atom";
 import { useMemo, useRef, useState, useEffect } from "react";
 import { LogRow } from "@renderer/components/log-viewer-shared";
 import { Virtuoso, VirtuosoHandle } from "react-virtuoso";
 import { ScrollArea } from "@renderer/components/ui/scroll-area";
 import { cn } from "@renderer/lib/utils";
-import { Button } from "@renderer/components/ui/button";
 import { IUserLog } from "@renderer/lib/typings";
 import {
   Collapsible,
@@ -22,7 +22,6 @@ import {
   CollapsibleContent
 } from "@renderer/components/ui/collapsible";
 import { Badge } from "@renderer/components/ui/badge";
-import { Checkbox } from "@renderer/components/ui/checkbox";
 import { ChevronRight, ChevronDown } from "lucide-react";
 
 export const Route = createFileRoute("/dashboard/main")({
@@ -40,6 +39,7 @@ function RouteComponent() {
   const logStructure = useAtomValue(logStructureAtom);
   const logKeys = useAtomValue(logKeysAtom);
   const parsedLogs = useAtomValue(parsedLogsMapAtom);
+  const deviceInfo = useAtomValue(baseDeviceInfoAtom);
 
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   const [activeFile, setActiveFile] = useState<string | null>(null);
@@ -259,6 +259,11 @@ function RouteComponent() {
 
       {/* Main Content */}
       <div className="flex-1 overflow-hidden relative bg-background">
+        <div className="flex items-center gap-1">
+          <Tag>Board: {deviceInfo.board}</Tag>
+          <Tag>OS Version: {deviceInfo.version}</Tag>
+          <Tag>ARC Status: {deviceInfo.arcStatus}</Tag>
+        </div>
         {allLogs.length === 0 ? (
           <div className="p-8 text-center text-muted-foreground text-sm flex flex-col items-center gap-2 mt-20">
             <span className="text-4xl">🗂️</span>
@@ -351,3 +356,11 @@ function RouteComponent() {
     </div>
   );
 }
+
+const Tag = ({ children }: { children: React.ReactNode }) => {
+  return (
+    <div className="text-tag text-text-secondary rounded-sm border border-stroke-divider p-1">
+      {children}
+    </div>
+  );
+};
