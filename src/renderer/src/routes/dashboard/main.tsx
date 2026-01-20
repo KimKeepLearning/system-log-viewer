@@ -42,23 +42,36 @@ function RouteComponent() {
   const deviceInfo = useAtomValue(baseDeviceInfoAtom);
 
   const virtuosoRef = useRef<VirtuosoHandle>(null);
+  const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
   const [activeFile, setActiveFile] = useState<string | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [pendingScrollKey, setPendingScrollKey] = useState<string | null>(null);
 
   const [searchQuery] = useAtom(searchQueryAtom);
   const [isRegex] = useAtom(isRegexAtom);
   const setMatchesCount = useSetAtom(searchMatchesCountAtom);
   const [currentMatchIndex] = useAtom(currentMatchIndexAtom);
 
+  // Default select first file
+  useEffect(() => {
+    const files = Object.keys(logStructure);
+    if (files.length > 0 && !selectedFileName) {
+      setSelectedFileName(files[0]);
+    } else if (files.length > 0 && selectedFileName && !files.includes(selectedFileName)) {
+      // If selected file disappeared (e.g. clear logs), select first
+      setSelectedFileName(files[0]);
+    }
+  }, [logStructure, selectedFileName]);
+
   // Flatten logs efficiently and keep track of start indices
   const { allLogs, fileIndices } = useMemo(() => {
+    if (!selectedFileName) return { allLogs: [], fileIndices: {} };
+
     const flatLogs: ExtendedLog[] = [];
     const indices: Record<string, number> = {};
 
-    const keysToProcess: string[] = [];
-    Object.keys(logStructure).forEach((fileName) => {
-      keysToProcess.push(...(logStructure[fileName] || []));
-    });
+    // Only process sections for the selected file
+    const keysToProcess = logStructure[selectedFileName] || [];
 
     keysToProcess.forEach((key) => {
       indices[key] = flatLogs.length;
@@ -91,12 +104,26 @@ function RouteComponent() {
     });
 
     return { allLogs: flatLogs, fileIndices: indices };
-  }, [logStructure, parsedLogs]);
+  }, [logStructure, parsedLogs, selectedFileName]);
+
+  // Handle pending scroll after view update
+  useEffect(() => {
+    if (pendingScrollKey && fileIndices[pendingScrollKey] !== undefined) {
+      virtuosoRef.current?.scrollToIndex({ index: fileIndices[pendingScrollKey], align: "start" });
+      setPendingScrollKey(null);
+    }
+  }, [pendingScrollKey, fileIndices]);
 
   const scrollToSection = (key: string) => {
-    const index = fileIndices[key];
-    if (index !== undefined && virtuosoRef.current) {
-      virtuosoRef.current.scrollToIndex({ index, align: "start" });
+    const fileName = key.split("::")[0];
+    if (fileName !== selectedFileName) {
+      setSelectedFileName(fileName);
+      setPendingScrollKey(key);
+    } else {
+      const index = fileIndices[key];
+      if (index !== undefined && virtuosoRef.current) {
+        virtuosoRef.current.scrollToIndex({ index, align: "start" });
+      }
     }
   };
 
@@ -111,9 +138,13 @@ function RouteComponent() {
             "flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-fill-component-navigation transition-colors group select-none cursor-pointer"
           )}
           onClick={() => {
-            // Scroll to start of file (first section)
+            // Select file and scroll to start
+            if (fileName !== selectedFileName) {
+              setSelectedFileName(fileName);
+            }
             if (sections.length > 0) {
-              scrollToSection(sections[0]);
+              // Optional: Scroll to first section if switching file?
+              // Since switching file essentially resets the view to the top, it should be automatic.
             }
           }}
         >
@@ -143,7 +174,9 @@ function RouteComponent() {
               const parts = sectionKey.split("::");
               const displayName = parts.length > 1 ? parts.slice(1).join("::") : sectionKey;
 
-              const isActive = activeFile === sectionKey;
+              const isActive =
+                activeFile === sectionKey ||
+                (selectedFileName === fileName && sectionKey === activeFile);
 
               return (
                 <div
