@@ -33,12 +33,15 @@ function RouteComponent() {
         setStatus("Parsing logs...");
 
         // Use async processor to avoid freezing UI
-        const { parsedLogs, structure } = await processFilesAsync(processedFiles, (msg) => {
-          setStatus(msg);
-        });
+        const { parsedLogs, structure, updatedFiles } = await processFilesAsync(
+          processedFiles,
+          (msg) => {
+            setStatus(msg);
+          }
+        );
 
         setProcessedLogs({
-          files: processedFiles,
+          files: updatedFiles,
           parsedLogs,
           structure
         });

@@ -19,7 +19,7 @@ interface LogListProps {
   onToggleExpand: (id: string) => void;
   searchQuery: string;
   isRegex: boolean;
-  virtuosoRef: React.RefObject<VirtuosoHandle> | null;
+  virtuosoRef: React.RefObject<VirtuosoHandle | null>;
 }
 
 export const LogList = ({

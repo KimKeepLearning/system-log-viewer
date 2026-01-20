@@ -8,9 +8,10 @@ import {
   isRegexAtom,
   searchMatchesCountAtom,
   currentMatchIndexAtom,
-  baseDeviceInfoAtom
+  logFilesAtom
 } from "@renderer/lib/atom";
-import { useRef, useState, useEffect, useCallback } from "react";
+import { parseDeviceInfo } from "@renderer/lib/log-parser";
+import { useRef, useState, useEffect, useCallback, useMemo } from "react";
 import { VirtuosoHandle } from "react-virtuoso";
 import { Checkbox } from "@renderer/components/ui/checkbox";
 
@@ -35,7 +36,7 @@ function RouteComponent() {
   const logStructure = useAtomValue(logStructureAtom);
   const logKeys = useAtomValue(logKeysAtom);
   const parsedLogs = useAtomValue(parsedLogsMapAtom);
-  const deviceInfo = useAtomValue(baseDeviceInfoAtom);
+  const logFiles = useAtomValue(logFilesAtom);
 
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
@@ -48,7 +49,19 @@ function RouteComponent() {
   const [isRegex] = useAtom(isRegexAtom);
   const setMatchesCount = useSetAtom(searchMatchesCountAtom);
   const [currentMatchIndex] = useAtom(currentMatchIndexAtom);
-
+  const deviceInfo = useMemo(() => {
+    // If no file selected, or files list is empty
+    if (!selectedFileName) {
+      console.log("No selected file name", selectedFileName);
+      return { board: undefined, version: undefined, arcStatus: undefined };
+    }
+    const file = logFiles.find((f) => f.name === selectedFileName);
+    if (!file) {
+      console.log("Selected file not found in logFiles", selectedFileName, logFiles);
+      return { board: undefined, version: undefined, arcStatus: undefined };
+    }
+    return parseDeviceInfo(file.content);
+  }, [selectedFileName, logFiles]);
   // Default select first file
   useEffect(() => {
     const files = Object.keys(logStructure);

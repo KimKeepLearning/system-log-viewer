@@ -11,7 +11,6 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as RawIndexRouteImport } from './routes/raw/index'
 import { Route as HomeIndexRouteImport } from './routes/home/index'
 import { Route as DashboardMainRouteImport } from './routes/dashboard/main'
 
@@ -23,11 +22,6 @@ const DashboardRoute = DashboardRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const RawIndexRoute = RawIndexRouteImport.update({
-  id: '/raw/',
-  path: '/raw/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const HomeIndexRoute = HomeIndexRouteImport.update({
@@ -46,14 +40,12 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof DashboardRouteWithChildren
   '/dashboard/main': typeof DashboardMainRoute
   '/home/': typeof HomeIndexRoute
-  '/raw/': typeof RawIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRouteWithChildren
   '/dashboard/main': typeof DashboardMainRoute
   '/home': typeof HomeIndexRoute
-  '/raw': typeof RawIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -61,21 +53,19 @@ export interface FileRoutesById {
   '/dashboard': typeof DashboardRouteWithChildren
   '/dashboard/main': typeof DashboardMainRoute
   '/home/': typeof HomeIndexRoute
-  '/raw/': typeof RawIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/dashboard' | '/dashboard/main' | '/home/' | '/raw/'
+  fullPaths: '/' | '/dashboard' | '/dashboard/main' | '/home/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/dashboard' | '/dashboard/main' | '/home' | '/raw'
-  id: '__root__' | '/' | '/dashboard' | '/dashboard/main' | '/home/' | '/raw/'
+  to: '/' | '/dashboard' | '/dashboard/main' | '/home'
+  id: '__root__' | '/' | '/dashboard' | '/dashboard/main' | '/home/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DashboardRoute: typeof DashboardRouteWithChildren
   HomeIndexRoute: typeof HomeIndexRoute
-  RawIndexRoute: typeof RawIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -92,13 +82,6 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/raw/': {
-      id: '/raw/'
-      path: '/raw'
-      fullPath: '/raw/'
-      preLoaderRoute: typeof RawIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/home/': {
@@ -134,7 +117,6 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DashboardRoute: DashboardRouteWithChildren,
   HomeIndexRoute: HomeIndexRoute,
-  RawIndexRoute: RawIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

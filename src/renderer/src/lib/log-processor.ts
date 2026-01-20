@@ -4,6 +4,7 @@ import { parseLogLine, extractSectionsRawAsync } from "./log-parser";
 export interface ProcessedLogData {
   parsedLogs: Record<string, IUserLog[]>;
   structure: Record<string, string[]>;
+  updatedFiles: LogFileContext[];
 }
 
 const LINES_CHUNK_SIZE = 5000;
@@ -60,6 +61,7 @@ export async function processFilesAsync(
 ): Promise<ProcessedLogData> {
   const parsedLogs: Record<string, IUserLog[]> = {};
   const structure: Record<string, string[]> = {};
+  const updatedFiles: LogFileContext[] = [];
 
   // Track seen file names to handle duplicates
   const seenNames = new Map<string, number>();
@@ -74,6 +76,8 @@ export async function processFilesAsync(
       displayName = `${file.name} (${count})`;
     }
     seenNames.set(file.name, count + 1);
+
+    updatedFiles.push({ ...file, name: displayName });
 
     onProgress(`Processing ${displayName} (${i + 1}/${files.length})...`);
     await sleep(20);
@@ -135,5 +139,5 @@ export async function processFilesAsync(
     structure[displayName] = sections;
   }
 
-  return { parsedLogs, structure };
+  return { parsedLogs, structure, updatedFiles };
 }
