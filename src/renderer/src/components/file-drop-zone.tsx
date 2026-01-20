@@ -4,11 +4,12 @@ import { cn } from "@renderer/lib/utils";
 import { Card } from "./ui/card";
 
 interface FileDropZoneProps {
-  onFileSelect: (file: File) => void;
+  onFileSelect: (files: File[]) => void;
   accept?: string;
+  multiple?: boolean;
 }
 
-export function FileDropZone({ onFileSelect, accept }: FileDropZoneProps) {
+export function FileDropZone({ onFileSelect, accept, multiple = false }: FileDropZoneProps) {
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -35,10 +36,14 @@ export function FileDropZone({ onFileSelect, accept }: FileDropZoneProps) {
       setIsDragging(false);
 
       if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-        onFileSelect(e.dataTransfer.files[0]);
+        if (multiple) {
+          onFileSelect(Array.from(e.dataTransfer.files));
+        } else {
+          onFileSelect([e.dataTransfer.files[0]]);
+        }
       }
     },
-    [onFileSelect]
+    [onFileSelect, multiple]
   );
 
   const handleClick = useCallback(() => {
@@ -48,10 +53,14 @@ export function FileDropZone({ onFileSelect, accept }: FileDropZoneProps) {
   const handleFileInput = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       if (e.target.files && e.target.files.length > 0) {
-        onFileSelect(e.target.files[0]);
+        if (multiple) {
+          onFileSelect(Array.from(e.target.files));
+        } else {
+          onFileSelect([e.target.files[0]]);
+        }
       }
     },
-    [onFileSelect]
+    [onFileSelect, multiple]
   );
 
   return (
@@ -71,6 +80,7 @@ export function FileDropZone({ onFileSelect, accept }: FileDropZoneProps) {
         onChange={handleFileInput}
         className="hidden"
         accept={accept}
+        multiple={multiple}
       />
       <div className="flex flex-col items-center gap-2 text-center pointer-events-none">
         <UploadCloud className="h-10 w-10 text-muted-foreground" />

@@ -12,7 +12,7 @@ import { Button } from "@vibeus/ui";
 import { Input } from "@renderer/components/ui/input";
 import { useSelectFile } from "@renderer/hooks/use-select-file";
 import { useEasterEgg } from "@renderer/hooks/use-easter-egg";
-import { Search, ArrowUp, ArrowDown, Regex } from "lucide-react";
+import { Search, ArrowUp, ArrowDown, Regex, Loader2 } from "lucide-react";
 import { cn } from "@renderer/lib/utils";
 import { useState, useEffect } from "react";
 
@@ -41,7 +41,7 @@ function RouteComponent() {
     }
   }, [searchQuery, isRegex]);
 
-  const { handleUploadClick } = useSelectFile();
+  const { handleUploadClick, isProcessing, progressStatus } = useSelectFile();
   const { handleLogoClick } = useEasterEgg();
 
   const handlePrevMatch = () => {
@@ -127,10 +127,20 @@ function RouteComponent() {
         <div className="flex items-center">
           <Button
             variant="secondary"
-            className="bg-fill-background-inverse text-text-on-interaction-inverse h-6"
+            className="bg-fill-background-inverse text-text-on-interaction-inverse h-6 text-xs px-3"
             onClick={handleUploadClick}
+            disabled={isProcessing}
           >
-            Upload new
+            {isProcessing ? (
+              <>
+                <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                <span className="truncate max-w-[100px] inline-block align-bottom">
+                  {progressStatus || "Loading..."}
+                </span>
+              </>
+            ) : (
+              "Upload new"
+            )}
           </Button>
         </div>
       </div>

@@ -1,7 +1,9 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Providers } from "@renderer/components/providers";
 import { FileDropZone } from "@renderer/components/file-drop-zone";
-import { loadLogContentAtom } from "@renderer/lib/atom";
+import { setProcessedLogsAtom } from "@renderer/lib/atom";
+import { readFiles } from "@renderer/lib/file-loader";
+import { processFilesAsync } from "@renderer/lib/log-processor";
 import { useSetAtom } from "jotai";
 import { useState } from "react";
 
@@ -10,58 +12,50 @@ export const Route = createFileRoute("/home/")({
 });
 
 function RouteComponent() {
-  const loadLogContent = useSetAtom(loadLogContentAtom);
+  const setProcessedLogs = useSetAtom(setProcessedLogsAtom);
   const [error, setError] = useState<string>();
+  const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState("");
   const navigate = useNavigate();
 
-  const handleFileSelect = async (file: File) => {
-    let path = "";
+  const handleFileSelect = async (files: File[]) => {
+    if (!files || files.length === 0) return;
+    setLoading(true);
+    setError(undefined);
+    setStatus("Reading files...");
+
     try {
-      if (window.api && typeof window.api.getPathForFile === "function") {
-        path = window.api.getPathForFile(file);
+      console.log("[Home] Reading files:", files);
+      const processedFiles = await readFiles(files);
+      console.log("[Home] Processed files:", processedFiles);
+
+      if (processedFiles && processedFiles.length > 0) {
+        setStatus("Parsing logs...");
+
+        // Use async processor to avoid freezing UI
+        const { parsedLogs, structure } = await processFilesAsync(processedFiles, (msg) => {
+          setStatus(msg);
+        });
+
+        setProcessedLogs({
+          files: processedFiles,
+          parsedLogs,
+          structure
+        });
+
+        setStatus("Navigating to dashboard...");
+        navigate({
+          to: "/dashboard/main"
+        });
       } else {
-        console.warn(
-          "window.api.getPathForFile is not available. Please restart the application to apply preload changes."
-        );
-        path = (file as File & { path: string }).path;
+        setError("Error: Failed to read files or files were empty.");
       }
-    } catch (e) {
-      console.warn("Failed to get path via webUtils, falling back to file.path", e);
-      path = (file as File & { path: string }).path;
-    }
-
-    console.log("[Renderer] File selected:", { name: file.name, path: path, size: file.size });
-
-    if (!path) {
-      setError(
-        "Error: File path is missing. If you just updated the code, please RESTART the application terminal/process."
-      );
-      return;
-    }
-
-    if (path) {
-      try {
-        console.log("[Renderer] Invoking read-file IPC with path:", path);
-        const result = await window.electron.ipcRenderer.invoke("read-file", path);
-        console.log("[Renderer] IPC Result length:", result ? result.length : "null");
-
-        if (typeof result === "string") {
-          loadLogContent(result);
-          navigate({
-            to: "/dashboard/main"
-          });
-        } else {
-          setError("Error: Failed to read file (IPC returned null)");
-        }
-      } catch (err) {
-        console.error("[Renderer] IPC Error:", err);
-        setError("Error reading file: " + (err instanceof Error ? err.message : String(err)));
-      }
-    } else {
-      console.warn(
-        '[Renderer] File object is missing "path" property. Is webPreferences.sandbox disabled?'
-      );
-      setError("Error: Could not determine file path. (File.path is empty)");
+    } catch (err) {
+      console.error("[Renderer] File Load Error:", err);
+      setError("Error reading files: " + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setLoading(false);
+      setStatus("");
     }
   };
 
@@ -74,8 +68,19 @@ function RouteComponent() {
             <p className="text-muted-foreground">Upload and view system logs</p>
           </div>
 
-          <FileDropZone onFileSelect={handleFileSelect} accept=".txt,.log,.zip" />
-          {error && <div className="text-red-600">{error}</div>}
+          <FileDropZone onFileSelect={handleFileSelect} accept=".txt,.log,.zip" multiple={true} />
+
+          {loading && (
+            <div className="text-center text-muted-foreground animate-pulse">
+              {status || "Processing..."}
+            </div>
+          )}
+
+          {error && (
+            <div className="text-red-600 text-center font-medium bg-red-50 p-2 rounded">
+              {error}
+            </div>
+          )}
         </div>
       </div>
     </Providers>

@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import {
+  logStructureAtom,
   logKeysAtom,
   parsedLogsMapAtom,
   searchQueryAtom,
@@ -21,6 +22,8 @@ import {
   CollapsibleContent
 } from "@renderer/components/ui/collapsible";
 import { Badge } from "@renderer/components/ui/badge";
+import { Checkbox } from "@renderer/components/ui/checkbox";
+import { ChevronRight, ChevronDown } from "lucide-react";
 
 export const Route = createFileRoute("/dashboard/main")({
   component: RouteComponent
@@ -34,8 +37,10 @@ interface ExtendedLog extends IUserLog {
 }
 
 function RouteComponent() {
+  const logStructure = useAtomValue(logStructureAtom);
   const logKeys = useAtomValue(logKeysAtom);
   const parsedLogs = useAtomValue(parsedLogsMapAtom);
+
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   const [activeFile, setActiveFile] = useState<string | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
@@ -50,7 +55,12 @@ function RouteComponent() {
     const flatLogs: ExtendedLog[] = [];
     const indices: Record<string, number> = {};
 
-    logKeys.forEach((key) => {
+    const keysToProcess: string[] = [];
+    Object.keys(logStructure).forEach((fileName) => {
+      keysToProcess.push(...(logStructure[fileName] || []));
+    });
+
+    keysToProcess.forEach((key) => {
       indices[key] = flatLogs.length;
       const logs = parsedLogs[key] || [];
 
@@ -81,7 +91,98 @@ function RouteComponent() {
     });
 
     return { allLogs: flatLogs, fileIndices: indices };
-  }, [logKeys, parsedLogs]);
+  }, [logStructure, parsedLogs]);
+
+  const scrollToSection = (key: string) => {
+    const index = fileIndices[key];
+    if (index !== undefined && virtuosoRef.current) {
+      virtuosoRef.current.scrollToIndex({ index, align: "start" });
+    }
+  };
+
+  // Sidebar File Item Component (Internal)
+  const FileItem = ({ fileName, sections }: { fileName: string; sections: string[] }) => {
+    const [isOpen, setIsOpen] = useState(true); // Default expanded
+
+    return (
+      <div className="mb-1">
+        <div
+          className={cn(
+            "flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-fill-component-navigation transition-colors group select-none cursor-pointer"
+          )}
+          onClick={() => {
+            // Scroll to start of file (first section)
+            if (sections.length > 0) {
+              scrollToSection(sections[0]);
+            }
+          }}
+        >
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsOpen(!isOpen);
+            }}
+            className="p-0.5 hover:bg-fill-interaction-subtle-hover rounded text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+          </button>
+
+          <span className="text-sm font-semibold truncate flex-1" title={fileName}>
+            {fileName}
+          </span>
+          <Badge variant="outline" className="text-[10px] h-5 px-1 ml-auto">
+            {sections.length}
+          </Badge>
+        </div>
+
+        {isOpen && (
+          <div className="ml-6 pl-2 border-l border-border/20 flex flex-col gap-0.5 mt-1">
+            {sections.map((sectionKey) => {
+              // sectionKey is "FileName::SectionName"
+              // We display only "SectionName"
+              const parts = sectionKey.split("::");
+              const displayName = parts.length > 1 ? parts.slice(1).join("::") : sectionKey;
+
+              const isActive = activeFile === sectionKey;
+
+              return (
+                <div
+                  key={sectionKey}
+                  className={cn(
+                    "flex items-center gap-2 rounded-md px-2 py-1 hover:bg-fill-component-navigation transition-colors cursor-pointer",
+                    isActive && "bg-fill-component-navigation text-primary"
+                  )}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    scrollToSection(sectionKey);
+                  }}
+                >
+                  <span
+                    className={cn(
+                      "text-xs text-left truncate flex-1 opacity-80 hover:opacity-100",
+                      isActive && "font-medium opacity-100"
+                    )}
+                    title={displayName}
+                  >
+                    {displayName}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const toggleExpand = (id: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   // Search Match Logic
   const matchIndices = useMemo(() => {
@@ -138,43 +239,19 @@ function RouteComponent() {
     return <div className="p-4">No logs found. Please open a log file.</div>;
   }
 
-  const handleAnchorClick = (key: string) => {
-    const index = fileIndices[key];
-    if (index !== undefined) {
-      virtuosoRef.current?.scrollToIndex({ index, align: "start" });
-      setActiveFile(key);
-    }
-  };
-
-  const toggleExpand = (id: string) => {
-    setExpandedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
+  const allFiles = Object.keys(logStructure);
 
   return (
     <div className="w-full h-full overflow-hidden flex flex-row">
       {/* Sidebar Anchors */}
       <div className="w-64 border-r bg-muted/20 shrink-0 flex flex-col">
-        <div className="p-3 font-semibold text-sm border-b">Log Files</div>
+        <div className="p-3 bg-muted/30 font-semibold text-sm border-b flex items-center justify-between">
+          <span>Log Files ({allFiles.length})</span>
+        </div>
         <ScrollArea className="h-[calc(100vh-140px)] scrollbar-container ">
           <div className="p-2 flex flex-col gap-1">
-            {logKeys.map((key) => (
-              <Button
-                key={key}
-                variant={activeFile === key ? "secondary" : "ghost"}
-                size="sm"
-                className={cn(
-                  "justify-start h-auto py-2 px-3 text-left font-normal whitespace-normal break-all hover:bg-fill-component-navigation",
-                  activeFile === key && "bg-fill-component-navigation shadow-none"
-                )}
-                onClick={() => handleAnchorClick(key)}
-              >
-                {key}
-              </Button>
+            {allFiles.map((fileName) => (
+              <FileItem key={fileName} fileName={fileName} sections={logStructure[fileName]} />
             ))}
           </div>
         </ScrollArea>
@@ -182,73 +259,94 @@ function RouteComponent() {
 
       {/* Main Content */}
       <div className="flex-1 overflow-hidden relative bg-background">
-        <Virtuoso
-          ref={virtuosoRef}
-          data={allLogs}
-          rangeChanged={({ startIndex }) => {
-            const log = allLogs[startIndex];
-            if (log && log.sourceFile !== activeFile) {
-              setActiveFile(log.sourceFile);
-            }
-          }}
-          className="h-[calc(100vh-140px)] scrollbar-container "
-          itemContent={(index, log) => (
-            <>
-              {fileIndices[log.sourceFile] === index && (
-                <div className="bg-muted/50 px-4 py-1.5 font-bold text-xs border-b border-border/50 flex items-center gap-2 sticky top-0 z-10 backdrop-blur-sm">
-                  <div className="w-1 h-3 bg-primary rounded-full"></div>
-                  {log.sourceFile}
-                </div>
-              )}
-              {log.count > 1 ? (
-                <Collapsible
-                  open={expandedIds.has(log.id)}
-                  onOpenChange={() => toggleExpand(log.id)}
-                >
-                  <div className="pl-2 flex border-b border-border/40 last:border-0 hover:bg-muted/10 transition-colors flex-col">
-                    <LogRow log={log} query={searchQuery} isRegex={isRegex}>
-                      <CollapsibleTrigger asChild>
-                        <Badge
-                          variant="secondary"
-                          className="ml-2 cursor-pointer h-5 px-1.5 min-w-8 justify-center bg-fill-interaction-secondary hover:bg-fill-interaction-secondary-hover inline-flex align-middle"
-                        >
-                          x{log.count}
-                        </Badge>
-                      </CollapsibleTrigger>
-                    </LogRow>
-                    <CollapsibleContent>
-                      {log.duplicates.length > 0 && (
-                        <div className="bg-muted/5 border-t border-border/30">
-                          {log.duplicates.map((dup, i) => (
-                            <div key={i} className="relative">
-                              {/* Connecting line visual */}
-                              <div className="border-b border-border/20 last:border-0">
-                                <LogRow
-                                  log={dup}
-                                  query={searchQuery}
-                                  isRegex={isRegex}
-                                  isMain={false}
-                                />
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </CollapsibleContent>
+        {allLogs.length === 0 ? (
+          <div className="p-8 text-center text-muted-foreground text-sm flex flex-col items-center gap-2 mt-20">
+            <span className="text-4xl">🗂️</span>
+            <p>No log sections selected.</p>
+            <p className="opacity-60">Import a log file to view logs.</p>
+          </div>
+        ) : (
+          <Virtuoso
+            ref={virtuosoRef}
+            data={allLogs}
+            rangeChanged={({ startIndex }) => {
+              const log = allLogs[startIndex];
+              if (log && log.sourceFile !== activeFile) {
+                setActiveFile(log.sourceFile);
+              }
+            }}
+            className="h-[calc(100vh-140px)] scrollbar-container "
+            itemContent={(index, log) => (
+              <>
+                {fileIndices[log.sourceFile] === index && (
+                  <div className="bg-muted/50 px-4 py-1.5 font-bold text-xs border-b border-border/50 flex items-center gap-2 sticky top-0 z-10 backdrop-blur-sm shadow-sm">
+                    <div className="w-1 h-3 bg-primary rounded-full"></div>
+                    {/* Show both File Name and Section Name if different
+                     log.sourceFile is "FileName::SectionName"
+                  */}
+                    {log.sourceFile.includes("::") ? (
+                      <>
+                        <span className="opacity-60 font-normal">
+                          {log.sourceFile.split("::")[0]}
+                        </span>
+                        <span className="opacity-40 font-light">/</span>
+                        <span>{log.sourceFile.split("::").slice(1).join("::")}</span>
+                      </>
+                    ) : (
+                      log.sourceFile
+                    )}
                   </div>
-                </Collapsible>
-              ) : (
-                <div className="pl-2 flex border-b border-border/40 last:border-0 hover:bg-muted/10 transition-colors flex-col">
-                  <div className="flex-1 min-w-0 flex items-start pr-2">
-                    <div className="flex-1 min-w-0">
-                      <LogRow log={log} query={searchQuery} isRegex={isRegex} />
+                )}
+                {log.count > 1 ? (
+                  <Collapsible
+                    open={expandedIds.has(log.id)}
+                    onOpenChange={() => toggleExpand(log.id)}
+                  >
+                    <div className="pl-2 flex border-b border-border/40 last:border-0 hover:bg-muted/10 transition-colors flex-col">
+                      <LogRow log={log} query={searchQuery} isRegex={isRegex}>
+                        <CollapsibleTrigger asChild>
+                          <Badge
+                            variant="secondary"
+                            className="ml-2 cursor-pointer h-5 px-1.5 min-w-8 justify-center bg-fill-interaction-secondary hover:bg-fill-interaction-secondary-hover inline-flex align-middle"
+                          >
+                            x{log.count}
+                          </Badge>
+                        </CollapsibleTrigger>
+                      </LogRow>
+                      <CollapsibleContent>
+                        {log.duplicates.length > 0 && (
+                          <div className="bg-muted/5 border-t border-border/30">
+                            {log.duplicates.map((dup, i) => (
+                              <div key={i} className="relative">
+                                {/* Connecting line visual */}
+                                <div className="border-b border-border/20 last:border-0">
+                                  <LogRow
+                                    log={dup}
+                                    query={searchQuery}
+                                    isRegex={isRegex}
+                                    isMain={false}
+                                  />
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </CollapsibleContent>
+                    </div>
+                  </Collapsible>
+                ) : (
+                  <div className="pl-2 flex border-b border-border/40 last:border-0 hover:bg-muted/10 transition-colors flex-col">
+                    <div className="flex-1 min-w-0 flex items-start pr-2">
+                      <div className="flex-1 min-w-0">
+                        <LogRow log={log} query={searchQuery} isRegex={isRegex} />
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
-            </>
-          )}
-        />
+                )}
+              </>
+            )}
+          />
+        )}
       </div>
     </div>
   );

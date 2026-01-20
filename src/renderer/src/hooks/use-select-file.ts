@@ -1,34 +1,42 @@
-import { loadLogContentAtom } from "@renderer/lib/atom";
+import { setProcessedLogsAtom } from "@renderer/lib/atom";
+import { readFiles } from "@renderer/lib/file-loader";
+import { processFilesAsync } from "@renderer/lib/log-processor";
 import { useNavigate } from "@tanstack/react-router";
 import { useSetAtom } from "jotai";
+import { useState } from "react";
 
 export const useSelectFile = () => {
-  const loadLogContent = useSetAtom(loadLogContentAtom);
+  const setProcessedLogs = useSetAtom(setProcessedLogsAtom);
   const navigate = useNavigate();
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [progressStatus, setProgressStatus] = useState("");
 
-  const handleFileSelect = async (file: File) => {
-    let path = "";
+  const handleFileSelect = async (files: File[]) => {
+    if (!files || files.length === 0) return;
+
+    setIsProcessing(true);
+    setProgressStatus("Reading files...");
+
     try {
-      if (window.api && typeof window.api.getPathForFile === "function") {
-        path = window.api.getPathForFile(file);
-      } else {
-        path = (file as File & { path: string }).path;
-      }
-    } catch (e) {
-      console.warn("Failed to get path:", e);
-      path = (file as File & { path: string }).path;
-    }
+      const processedFiles = await readFiles(files);
+      if (processedFiles && processedFiles.length > 0) {
+        const { parsedLogs, structure } = await processFilesAsync(processedFiles, (msg) => {
+          setProgressStatus(msg);
+        });
 
-    if (path) {
-      try {
-        const result = await window.electron.ipcRenderer.invoke("read-file", path);
-        if (typeof result === "string") {
-          loadLogContent(result);
-          navigate({ to: "/dashboard/main" });
-        }
-      } catch (err) {
-        console.error("Error reading file:", err);
+        setProcessedLogs({
+          files: processedFiles,
+          parsedLogs,
+          structure
+        });
+
+        navigate({ to: "/dashboard/main" });
       }
+    } catch (err) {
+      console.error("Error reading file:", err);
+    } finally {
+      setIsProcessing(false);
+      setProgressStatus("");
     }
   };
 
@@ -36,14 +44,15 @@ export const useSelectFile = () => {
     const input = document.createElement("input");
     input.type = "file";
     input.accept = ".txt,.log,.zip";
+    input.multiple = true;
     input.onchange = (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (file) {
-        handleFileSelect(file);
+      const files = (e.target as HTMLInputElement).files;
+      if (files && files.length > 0) {
+        handleFileSelect(Array.from(files));
       }
     };
     input.click();
   };
 
-  return { handleFileSelect, handleUploadClick };
+  return { handleFileSelect, handleUploadClick, isProcessing, progressStatus };
 };

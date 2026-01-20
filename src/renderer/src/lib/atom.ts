@@ -1,34 +1,57 @@
 import { atom } from "jotai";
-import { DeviceInfo, IUserLog } from "./typings";
-import { parseAllLogSections, parseDeviceInfo } from "./log-parser";
+import { DeviceInfo, IUserLog, LogFileContext } from "./typings";
+import { parseDeviceInfo } from "./log-parser";
 
-// Raw log content
-export const logContentAtom = atom<string>("");
+// Raw log files
+export const logFilesAtom = atom<LogFileContext[]>([]);
 
 export const baseDeviceInfoAtom = atom<DeviceInfo>((get) => {
-  const logContent = get(logContentAtom);
-  return parseDeviceInfo(logContent);
+  const files = get(logFilesAtom);
+  if (files.length === 0) {
+    return { board: "unknown", version: "unknown", arcStatus: "unknown" } as unknown as DeviceInfo;
+  }
+  // Use the first file for device info, or maybe aggregate?
+  // Usually the system dump has the info header.
+  return parseDeviceInfo(files[0].content);
 });
 
-// A map of all parsed logs, keyed by their section name
-// Derived from logContentAtom to ensure they are always in sync
-export const parsedLogsMapAtom = atom<Record<string, IUserLog[]>>((get) => {
-  const content = get(logContentAtom);
-  if (!content) return {};
-  return parseAllLogSections(content);
-});
+// A map of all parsed logs, keyed by "FileName::SectionName"
+// Now a state atom, set by loadLogFilesAtom
+export const parsedLogsMapAtom = atom<Record<string, IUserLog[]>>({});
 
-// Derived atom to get the list of available log keys
+// Derived atom to get the hierarchical structure of logs for UI
+// Now a state atom, set by loadLogFilesAtom
+export const logStructureAtom = atom<Record<string, string[]>>({});
+
+// Derived atom to get the list of available log keys (flat list of composite keys)
 export const logKeysAtom = atom<string[]>((get) => {
   const map = get(parsedLogsMapAtom);
-  // Return keys in insertion order (which generally matches file order)
   return Object.keys(map);
 });
 
-// Action atom to load and parse content together
-export const loadLogContentAtom = atom(null, (_get, set, content: string) => {
-  set(logContentAtom, content);
-  // parsedLogsMapAtom is derived, no need to set
+// Action atom to set processed logs directly
+export const setProcessedLogsAtom = atom(
+  null,
+  (
+    _get,
+    set,
+    data: {
+      files: LogFileContext[];
+      parsedLogs: Record<string, IUserLog[]>;
+      structure: Record<string, string[]>;
+    }
+  ) => {
+    set(logFilesAtom, data.files);
+    set(parsedLogsMapAtom, data.parsedLogs);
+    set(logStructureAtom, data.structure);
+  }
+);
+
+// Deprecated: use processFilesAsync and setProcessedLogsAtom instead
+export const loadLogFilesAtom = atom(null, (_get, set, files: LogFileContext[]) => {
+  set(logFilesAtom, files);
+  // Logic moved to log-processor.ts for async handling
+  console.warn("loadLogFilesAtom is deprecated. Use async processing.");
 });
 
 export const searchQueryAtom = atom<string>("");
