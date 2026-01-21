@@ -21,7 +21,7 @@ export const LogRow = ({
 }: LogRowProps) => (
   <div
     className={cn(
-      "text-text-primary font-mono text-xs flex gap-2 py-1 border-b border-border/50 last:border-0 hover:bg-fill-component-navigation group items-start min-h-7.5",
+      "text-text-primary font-mono text-xs flex gap-2 py-1 border-b border-border/50 last:border-0 items-start min-h-7.5",
       !isMain && "pl-2 bg-muted/20"
     )}
   >

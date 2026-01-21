@@ -20,6 +20,7 @@ interface LogListProps {
   searchQuery: string;
   isRegex: boolean;
   virtuosoRef: React.RefObject<VirtuosoHandle | null>;
+  highlightedIndex?: number;
 }
 
 export const LogList = ({
@@ -32,7 +33,8 @@ export const LogList = ({
   onToggleExpand,
   searchQuery,
   isRegex,
-  virtuosoRef
+  virtuosoRef,
+  highlightedIndex
 }: LogListProps) => {
   if (logs.length === 0) {
     return (
@@ -116,7 +118,8 @@ export const LogList = ({
                     "pl-2 flex border-b border-border/40 last:border-0 transition-colors flex-col",
                     isMergedView && isPriorityLog
                       ? "bg-primary/5 hover:bg-primary/10 border-l-2 border-l-primary"
-                      : "hover:bg-muted/10"
+                      : "hover:bg-muted/10",
+                    highlightedIndex === index && "bg-yellow-100"
                   )}
                 >
                   <LogRow log={log} query={searchQuery} isRegex={isRegex}>
@@ -159,7 +162,12 @@ export const LogList = ({
                     : "hover:bg-muted/10"
                 )}
               >
-                <div className="flex-1 min-w-0 flex items-start pr-2">
+                <div
+                  className={cn(
+                    "flex-1 min-w-0 flex items-start pr-2 hover:bg-fill-component-navigation",
+                    highlightedIndex === index && "bg-yellow-100"
+                  )}
+                >
                   <LogRow log={log} query={searchQuery} isRegex={isRegex} />
                 </div>
               </div>

@@ -125,20 +125,22 @@ function RouteComponent() {
     setMatchesCount(matchIndices.length);
   }, [matchIndices.length, setMatchesCount]);
 
+  // Calculate active match log index for highlighting
+  const activeMatchLogIndex = useMemo(() => {
+    if (matchIndices.length === 0) return -1;
+    return matchIndices[Math.abs(currentMatchIndex) % matchIndices.length];
+  }, [matchIndices, currentMatchIndex]);
+
   // Scroll to active match
   useEffect(() => {
-    if (matchIndices.length > 0) {
-      // Ensure index is within bounds (though dashboard should handle wrapping, we safeguard)
-      const targetMatchIndex = Math.abs(currentMatchIndex) % matchIndices.length;
-      const targetLogIndex = matchIndices[targetMatchIndex];
-
+    if (activeMatchLogIndex !== -1) {
       virtuosoRef.current?.scrollToIndex({
-        index: targetLogIndex,
+        index: activeMatchLogIndex,
         align: "center",
         behavior: "auto"
       });
     }
-  }, [currentMatchIndex, matchIndices]);
+  }, [activeMatchLogIndex]);
 
   if (logKeys.length === 0) {
     return <div className="p-4">No logs found. Please open a log file.</div>;
@@ -191,6 +193,7 @@ function RouteComponent() {
           searchQuery={searchQuery}
           isRegex={isRegex}
           virtuosoRef={virtuosoRef}
+          highlightedIndex={activeMatchLogIndex}
         />
       </div>
     </div>
