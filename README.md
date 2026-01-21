@@ -31,12 +31,14 @@ This project is built using a modern, robust stack:
 ### Installation
 
 1. Clone the repository:
+
    ```bash
    git clone https://github.com/KimKeepLearning/system-log-viewer.git
    cd system-log-viewer
    ```
 
 2. Install dependencies:
+
    ```bash
    npm install
    ```

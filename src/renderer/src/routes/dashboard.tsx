@@ -57,7 +57,7 @@ function RouteComponent() {
       {/* Header */}
       <div className="w-full flex items-center p-spacing-sm">
         {/* Logo */}
-        <div className="flex items-center gap-spacing-xs" onClick={handleLogoClick}>
+        <div className="flex items-center gap-spacing-xs cursor-pointer" onClick={handleLogoClick}>
           <LogoIcon className="size-size-sm" />
           <div className="text-body-bold">System Log Viewer</div>
         </div>

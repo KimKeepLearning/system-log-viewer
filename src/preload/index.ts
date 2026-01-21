@@ -1,10 +1,13 @@
-import { contextBridge, webUtils } from "electron";
+import { contextBridge, webUtils, ipcRenderer } from "electron";
 import { electronAPI } from "@electron-toolkit/preload";
 
 // Custom APIs for renderer
 const api = {
   getPathForFile: (file: File): string => {
     return webUtils.getPathForFile(file);
+  },
+  readRemoteFile: (config: any, filePath: string): Promise<string> => {
+    return ipcRenderer.invoke("ssh:read-file", config, filePath);
   }
 };
 

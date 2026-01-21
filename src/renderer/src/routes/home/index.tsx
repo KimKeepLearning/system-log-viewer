@@ -4,6 +4,8 @@ import { FileDropZone } from "@renderer/components/file-drop-zone";
 import { setProcessedLogsAtom } from "@renderer/lib/atom";
 import { readFiles } from "@renderer/lib/file-loader";
 import { processFilesAsync } from "@renderer/lib/log-processor";
+import { SSHConnectDialog } from "@renderer/components/ssh-connect-dialog";
+import { LogFileContext } from "@renderer/lib/typings";
 import { useSetAtom } from "jotai";
 import { useState } from "react";
 
@@ -18,6 +20,48 @@ function RouteComponent() {
   const [status, setStatus] = useState("");
   const navigate = useNavigate();
 
+  const processLogContexts = async (processedFiles: LogFileContext[]) => {
+    if (processedFiles && processedFiles.length > 0) {
+      setStatus("Parsing logs...");
+
+      // Use async processor to avoid freezing UI
+      const { parsedLogs, structure, updatedFiles } = await processFilesAsync(
+        processedFiles,
+        (msg) => {
+          setStatus(msg);
+        }
+      );
+
+      setProcessedLogs({
+        files: updatedFiles,
+        parsedLogs,
+        structure
+      });
+
+      setStatus("Navigating to dashboard...");
+      navigate({
+        to: "/dashboard/main"
+      });
+    } else {
+      setError("Error: No valid content found.");
+    }
+  };
+
+  const handleSSHConnect = async (files: LogFileContext[]) => {
+    setLoading(true);
+    setError(undefined);
+    setStatus("Processing SSH logs...");
+    try {
+      await processLogContexts(files);
+    } catch (err) {
+      console.error("[Renderer] SSH Process Error:", err);
+      setError("Error processing SSH logs: " + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setLoading(false);
+      setStatus("");
+    }
+  };
+
   const handleFileSelect = async (files: File[]) => {
     if (!files || files.length === 0) return;
     setLoading(true);
@@ -29,30 +73,7 @@ function RouteComponent() {
       const processedFiles = await readFiles(files);
       console.log("[Home] Processed files:", processedFiles);
 
-      if (processedFiles && processedFiles.length > 0) {
-        setStatus("Parsing logs...");
-
-        // Use async processor to avoid freezing UI
-        const { parsedLogs, structure, updatedFiles } = await processFilesAsync(
-          processedFiles,
-          (msg) => {
-            setStatus(msg);
-          }
-        );
-
-        setProcessedLogs({
-          files: updatedFiles,
-          parsedLogs,
-          structure
-        });
-
-        setStatus("Navigating to dashboard...");
-        navigate({
-          to: "/dashboard/main"
-        });
-      } else {
-        setError("Error: Failed to read files or files were empty.");
-      }
+      await processLogContexts(processedFiles);
     } catch (err) {
       console.error("[Renderer] File Load Error:", err);
       setError("Error reading files: " + (err instanceof Error ? err.message : String(err)));
@@ -72,6 +93,14 @@ function RouteComponent() {
           </div>
 
           <FileDropZone onFileSelect={handleFileSelect} accept=".txt,.log,.zip" multiple={true} />
+
+          <div className="flex items-center justify-center gap-2">
+            <span className="text-sm text-muted-foreground">or</span>
+          </div>
+
+          <div className="flex justify-center">
+            <SSHConnectDialog onConnect={handleSSHConnect} onError={(msg) => setError(msg)} />
+          </div>
 
           {loading && (
             <div className="text-center text-muted-foreground animate-pulse">

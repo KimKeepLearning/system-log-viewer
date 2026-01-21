@@ -5,6 +5,9 @@ import AdmZip from "adm-zip";
 import { electronApp, optimizer, is } from "@electron-toolkit/utils";
 import icon from "../../resources/icon.png?asset";
 const { updateElectronApp } = require("update-electron-app");
+import { registerSSHHandlers } from "./ssh";
+
+registerSSHHandlers();
 
 updateElectronApp();
 

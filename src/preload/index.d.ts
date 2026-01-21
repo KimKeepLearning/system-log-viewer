@@ -5,6 +5,7 @@ declare global {
     electron: ElectronAPI;
     api: {
       getPathForFile: (file: File) => string;
+      readRemoteFile: (config: any, filePath: string) => Promise<string>;
     };
   }
 }
