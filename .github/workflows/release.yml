@@ -2,8 +2,9 @@ name: Release
 
 on:
   push:
-    tags:
-      - "v*"
+    - main
+    # tags:
+    #   - "v*"
 
 jobs:
   publish:
