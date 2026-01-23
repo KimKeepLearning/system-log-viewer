@@ -64,10 +64,8 @@ export const LogList = ({
         const isPriorityLog = [
           "chrome_user_log",
           "chrome_user_log.PREVIOUS",
-          "chrome_user_log.PRIVIOUS", // Handle user typo if actual file has it
           "chrome_system_log",
           "chrome_system_log.PREVIOUS",
-          "chrome_system_log.PRIVIOUS"
         ].includes(sectionName);
 
         return (
