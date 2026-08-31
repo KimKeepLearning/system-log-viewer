@@ -100,6 +100,13 @@ export const RULES: Rule[] = [
     pattern: /\btpm\b[^=]*(?:failure|failed|error 0x)|TPM_RC_[A-Z]+|\btcsd\b.*(?:fail|error)/i
   },
   {
+    id: "no-space",
+    title: "Out of disk space",
+    severity: "critical",
+    why: "A write failed with ENOSPC. Whatever else is going wrong on this device, check the disk first: a full volume makes unrelated things fail in confusing ways.",
+    pattern: /No space left on device|\bENOSPC\b/i
+  },
+  {
     id: "mount-failure",
     title: "Cryptohome mount failed",
     severity: "warning",

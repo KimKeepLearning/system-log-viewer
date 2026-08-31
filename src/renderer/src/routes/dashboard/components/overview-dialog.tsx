@@ -24,6 +24,7 @@ import {
   parseHistograms
 } from "@renderer/lib/log-histograms";
 import type { RuleSeverity } from "@renderer/lib/log-rules";
+import { inspectStorage } from "@renderer/lib/log-storage";
 import { ExtendedLog } from "../types";
 
 interface OverviewDialogProps {
@@ -87,6 +88,17 @@ function OverviewBody({ logs, fileName, onJumpToLog }: OverviewDialogProps) {
     return [...matching].sort((a, b) => b.count - a.count).slice(0, 60);
   }, [metrics, metricQuery]);
 
+  // A full disk is never stated in a log line -- the machine just starts
+  // failing at unrelated things -- so it has to be read out of the tables.
+  const storage = useMemo(() => {
+    const file = logFiles.find((entry) => entry.name === fileName);
+    if (!file) return [];
+    return inspectStorage(
+      extractLogSection(file.content, "disk_usage"),
+      extractLogSection(file.content, "system_log_stats")
+    );
+  }, [logFiles, fileName]);
+
   const errors = overview.levelCounts.ERROR ?? 0;
   const warnings = overview.levelCounts.WARN ?? 0;
   const spanMs =
@@ -104,8 +116,10 @@ function OverviewBody({ logs, fileName, onJumpToLog }: OverviewDialogProps) {
         <TabsTrigger value="summary">Summary</TabsTrigger>
         <TabsTrigger value="diagnostics">
           Diagnostics
-          {overview.findings.length > 0 && (
-            <span className="ml-1 tabular-nums opacity-60">{overview.findings.length}</span>
+          {overview.findings.length + storage.length > 0 && (
+            <span className="ml-1 tabular-nums opacity-60">
+              {overview.findings.length + storage.length}
+            </span>
           )}
         </TabsTrigger>
         <TabsTrigger value="clusters">Repeats</TabsTrigger>
@@ -173,7 +187,36 @@ function OverviewBody({ logs, fileName, onJumpToLog }: OverviewDialogProps) {
         </TabsContent>
 
         <TabsContent value="diagnostics" className="flex flex-col gap-2 m-0">
-          {overview.findings.length === 0 ? (
+          {/* Storage first: when the disk is full it is the cause and the log
+              findings below are its symptoms. */}
+          {storage.map((finding) => {
+            const style = SEVERITY_STYLE[finding.severity];
+            return (
+              <div
+                key={finding.id}
+                className="border rounded-md p-2 flex flex-col gap-1 min-w-0 border-l-2 border-l-red-500"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <span
+                    className={cn(
+                      "inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium shrink-0",
+                      style.chip
+                    )}
+                  >
+                    <style.Icon className="size-3" />
+                    {finding.severity}
+                  </span>
+                  <span className="text-sm font-medium truncate min-w-0">{finding.title}</span>
+                </div>
+                <p className="text-xs text-muted-foreground">{finding.why}</p>
+                <p className="text-[11px] font-mono truncate opacity-70 min-w-0 select-text">
+                  {finding.evidence}
+                </p>
+              </div>
+            );
+          })}
+
+          {overview.findings.length === 0 && storage.length === 0 ? (
             <p className="text-sm text-muted-foreground py-8 text-center">
               None of the known failure patterns appear in this log.
             </p>
