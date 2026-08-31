@@ -55,6 +55,14 @@ export const LogRow = ({ log, isMain = true, patterns = NO_PATTERNS, children }:
             <HighlightedText text={log.message} patterns={patterns} />
           </b>
         </span>
+        {log.truncated && (
+          <span
+            className="ml-1.5 text-[10px] font-sans font-normal text-muted-foreground border border-dashed border-border rounded px-1 py-px align-middle select-none"
+            title="ChromeOS caps each section's size and cut this line where the cap fell"
+          >
+            cut off by the capture
+          </span>
+        )}
         {children}
       </div>
     </span>

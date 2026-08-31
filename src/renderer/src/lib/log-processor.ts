@@ -9,6 +9,22 @@ export interface ProcessedLogData {
   sectionStats: Record<string, SectionStats>;
 }
 
+/**
+ * ChromeOS caps how much of a section it writes and cuts the last line wherever
+ * the cap happened to fall -- chrome_system_log commonly ends mid-word. A source
+ * bracket that opens and never closes proves it, and lets the reader tell a
+ * truncated line from a genuinely short one.
+ *
+ * A cut that lands mid-word instead is indistinguishable from a normal line and
+ * stays unmarked; this catches the common case, not every case.
+ */
+const markIfCutOff = (logs: IUserLog[]): void => {
+  const last = logs[logs.length - 1];
+  if (last && last.message.startsWith("[") && !last.message.includes("]")) {
+    last.truncated = true;
+  }
+};
+
 const summarize = (logs: IUserLog[]): SectionStats => {
   const stats: SectionStats = {
     lines: logs.length,
@@ -172,6 +188,7 @@ export async function processFilesAsync(
           await sleep(5);
         });
 
+        markIfCutOff(logs);
         parsedLogs[uniqueKey] = logs;
         sections.push(uniqueKey);
       }
@@ -193,6 +210,7 @@ export async function processFilesAsync(
       });
 
       if (logs.length > 0) {
+        markIfCutOff(logs);
         parsedLogs[uniqueKey] = logs;
         sections.push(uniqueKey);
         sectionStats[uniqueKey] = summarize(logs);

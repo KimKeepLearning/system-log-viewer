@@ -31,4 +31,6 @@ export interface IUserLog {
   message: string;
   process?: string;
   source?: string;
+  /** The capture cut this line off; only ever set on the last line of a section. */
+  truncated?: boolean;
 }
