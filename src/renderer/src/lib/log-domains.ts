@@ -73,3 +73,29 @@ export const classifySection = (sectionKey: string): LogDomain => {
 
 export const sectionNameOf = (compositeKey: string): string =>
   compositeKey.split("::").slice(1).join("::") || compositeKey;
+
+/**
+ * Files carry their whole path inside the archive, which is unambiguous but
+ * unreadable: three entries from one feedback zip all begin with the same
+ * twenty-two character name and differ only at the end, exactly where
+ * truncation cuts. Labels are the file name alone, with just enough of the
+ * parent path to separate ones that would otherwise read the same.
+ */
+export const shortFileLabels = (names: string[]): Map<string, string> => {
+  const basenameOf = (name: string) => name.split("/").pop() ?? name;
+
+  const collisions = new Map<string, number>();
+  for (const name of names) {
+    const base = basenameOf(name);
+    collisions.set(base, (collisions.get(base) ?? 0) + 1);
+  }
+
+  const labels = new Map<string, string>();
+  for (const name of names) {
+    const segments = name.split("/");
+    const base = segments[segments.length - 1];
+    const needsParent = (collisions.get(base) ?? 0) > 1 && segments.length > 1;
+    labels.set(name, needsParent ? `${segments[segments.length - 2]}/${base}` : base);
+  }
+  return labels;
+};

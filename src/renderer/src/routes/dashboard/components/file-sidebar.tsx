@@ -5,7 +5,13 @@ import { cn } from "@renderer/lib/utils";
 import { Input } from "@renderer/components/ui/input";
 import { ScrollArea } from "@renderer/components/ui/scroll-area";
 import { sectionFilterAtom, sectionStatsAtom } from "@renderer/lib/atom";
-import { classifySection, LOG_DOMAINS, LogDomain, sectionNameOf } from "@renderer/lib/log-domains";
+import {
+  classifySection,
+  LOG_DOMAINS,
+  LogDomain,
+  sectionNameOf,
+  shortFileLabels
+} from "@renderer/lib/log-domains";
 import { SectionStats } from "@renderer/lib/typings";
 
 interface FileSidebarProps {
@@ -140,6 +146,7 @@ export const FileSidebar = ({
   }, [logStructure, selectedFileName, stats, query, hideEmpty]);
 
   const totalShown = grouped.reduce((sum, group) => sum + group.entries.length, 0);
+  const fileLabels = useMemo(() => shortFileLabels(files), [files]);
 
   const togglePin = (key: string) => {
     const next = new Set(sectionFilter);
@@ -176,7 +183,7 @@ export const FileSidebar = ({
               )}
               title={fileName}
             >
-              {fileName}
+              {fileLabels.get(fileName) ?? fileName}
             </button>
           ))}
         </div>

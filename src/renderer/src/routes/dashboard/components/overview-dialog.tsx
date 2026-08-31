@@ -11,11 +11,18 @@ import {
   DialogTrigger
 } from "@renderer/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@renderer/components/ui/tabs";
+import { Input } from "@renderer/components/ui/input";
 import { cn } from "@renderer/lib/utils";
 import { logFilesAtom } from "@renderer/lib/atom";
 import { extractLogSection } from "@renderer/lib/log-parser";
 import { analyseLogs } from "@renderer/lib/log-analysis";
 import { summariseBoot } from "@renderer/lib/log-tables";
+import {
+  formatMetric,
+  highlightedMetrics,
+  looksLikeHistograms,
+  parseHistograms
+} from "@renderer/lib/log-histograms";
 import type { RuleSeverity } from "@renderer/lib/log-rules";
 import { ExtendedLog } from "../types";
 
@@ -57,6 +64,29 @@ function OverviewBody({ logs, fileName, onJumpToLog }: OverviewDialogProps) {
     return summariseBoot(extractLogSection(file.content, "bootstat_summary"));
   }, [logFiles, fileName]);
 
+  // The UMA dump is a sibling file in the archive, not a section of this one.
+  const metrics = useMemo(() => {
+    const file = logFiles.find(
+      (entry) => !entry.imageDataUrl && looksLikeHistograms(entry.content)
+    );
+    if (!file) return null;
+    const histograms = parseHistograms(file.content);
+    return histograms.length > 0
+      ? { histograms, highlights: highlightedMetrics(histograms) }
+      : null;
+  }, [logFiles]);
+
+  const [metricQuery, setMetricQuery] = useState("");
+  const shownMetrics = useMemo(() => {
+    if (!metrics) return [];
+    const needle = metricQuery.trim().toLowerCase();
+    const matching = needle
+      ? metrics.histograms.filter((histogram) => histogram.name.toLowerCase().includes(needle))
+      : metrics.histograms;
+    // Busiest first: a counter nobody incremented says nothing.
+    return [...matching].sort((a, b) => b.count - a.count).slice(0, 60);
+  }, [metrics, metricQuery]);
+
   const errors = overview.levelCounts.ERROR ?? 0;
   const warnings = overview.levelCounts.WARN ?? 0;
   const spanMs =
@@ -80,6 +110,7 @@ function OverviewBody({ logs, fileName, onJumpToLog }: OverviewDialogProps) {
         </TabsTrigger>
         <TabsTrigger value="clusters">Repeats</TabsTrigger>
         {boot && <TabsTrigger value="boot">Boot</TabsTrigger>}
+        {metrics && <TabsTrigger value="metrics">Metrics</TabsTrigger>}
       </TabsList>
 
       <div className="flex-1 min-w-0 overflow-x-hidden overflow-y-auto max-h-[58vh] scrollbar-container pr-1">
@@ -258,6 +289,73 @@ function OverviewBody({ logs, fileName, onJumpToLog }: OverviewDialogProps) {
                   </div>
                 );
               })}
+            </div>
+          </TabsContent>
+        )}
+
+        {metrics && (
+          <TabsContent value="metrics" className="flex flex-col gap-3 m-0">
+            <p className="text-xs text-muted-foreground">
+              Chrome&rsquo;s own counters, from histograms.txt. They put a number on what the log
+              only describes &mdash; and are measured independently, so agreeing with the log is
+              corroboration.
+            </p>
+
+            <div className="grid grid-cols-2 gap-2">
+              {metrics.highlights.map(({ highlight, histogram }) => (
+                <div
+                  key={highlight.label}
+                  className="flex flex-col gap-0.5 rounded-md border p-2 min-w-0"
+                  title={histogram.name}
+                >
+                  <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                    {highlight.label}
+                  </span>
+                  <span className="text-sm font-semibold tabular-nums">
+                    {formatMetric(
+                      highlight.unit === "count" ? histogram.count : histogram.mean,
+                      highlight.unit
+                    )}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground">{highlight.why}</span>
+                </div>
+              ))}
+            </div>
+
+            <div>
+              <h4 className="text-xs font-semibold mb-1">
+                All counters ({metrics.histograms.length.toLocaleString()})
+              </h4>
+              <Input
+                value={metricQuery}
+                onChange={(event) => setMetricQuery(event.target.value)}
+                placeholder="Filter by name, e.g. BootTime or Login"
+                className="h-7 text-xs mb-1"
+              />
+              {shownMetrics.map((histogram) => (
+                <div
+                  key={histogram.name}
+                  className="flex items-baseline gap-2 py-0.5 border-b border-border/40 min-w-0"
+                >
+                  <span
+                    className="text-[11px] font-mono truncate flex-1 min-w-0"
+                    title={histogram.name}
+                  >
+                    {histogram.name}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground tabular-nums w-14 text-right shrink-0">
+                    n={histogram.count.toLocaleString()}
+                  </span>
+                  <span className="text-[10px] tabular-nums w-16 text-right shrink-0">
+                    {histogram.mean.toFixed(1)}
+                  </span>
+                </div>
+              ))}
+              {shownMetrics.length === 0 && (
+                <p className="text-xs text-muted-foreground py-4 text-center">
+                  No counter matches &ldquo;{metricQuery}&rdquo;.
+                </p>
+              )}
             </div>
           </TabsContent>
         )}

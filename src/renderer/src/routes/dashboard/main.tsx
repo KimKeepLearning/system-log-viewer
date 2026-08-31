@@ -55,19 +55,17 @@ function RouteComponent() {
   const patterns = useMemo(() => highlightPatterns(parsedQuery), [parsedQuery]);
   const setMatchesCount = useSetAtom(searchMatchesCountAtom);
   const [currentMatchIndex] = useAtom(currentMatchIndexAtom);
+  // The device is a property of the archive, not of whichever file is open:
+  // reading it from the selection made the header say "Unknown board" as soon
+  // as you clicked histograms.txt, which carries no device fields.
   const deviceInfo = useMemo(() => {
-    // If no file selected, or files list is empty
-    if (!selectedFileName) {
-      console.log("No selected file name", selectedFileName);
-      return { board: undefined, version: undefined, arcStatus: undefined };
+    for (const file of logFiles) {
+      if (file.imageDataUrl) continue;
+      const info = parseDeviceInfo(file.content);
+      if (info.board && info.board !== "unknown") return info;
     }
-    const file = logFiles.find((f) => f.name === selectedFileName);
-    if (!file) {
-      console.log("Selected file not found in logFiles", selectedFileName, logFiles);
-      return { board: undefined, version: undefined, arcStatus: undefined };
-    }
-    return parseDeviceInfo(file.content);
-  }, [selectedFileName, logFiles]);
+    return { board: undefined, version: undefined, arcStatus: undefined };
+  }, [logFiles]);
   // Default select first file
   useEffect(() => {
     const files = Object.keys(logStructure);
