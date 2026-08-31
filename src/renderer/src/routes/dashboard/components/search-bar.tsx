@@ -113,7 +113,10 @@ export const SearchBar = ({
   };
 
   return (
-    <div className="flex items-center gap-1.5 min-w-0">
+    // flex-1 on the root, not just on the input: without it the bar is sized to
+    // its content, and the input's own flex-1 divides up that width instead of
+    // the row's.
+    <div className="flex flex-1 items-center gap-1.5 min-w-0">
       <div className="relative flex-1 min-w-0">
         <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
         <Input
