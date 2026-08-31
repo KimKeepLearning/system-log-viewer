@@ -12,6 +12,8 @@ import {
 import { parseDeviceInfo } from "@renderer/lib/log-parser";
 import { highlightPatterns, parseQuery } from "@renderer/lib/log-query";
 import { sectionNameOf } from "@renderer/lib/log-domains";
+import { detectBootSessions, timelineEvents } from "@renderer/lib/log-analysis";
+import { runRules } from "@renderer/lib/log-rules";
 import { useRef, useState, useEffect, useCallback, useMemo } from "react";
 import { VirtuosoHandle } from "react-virtuoso";
 import { Clock } from "lucide-react";
@@ -19,6 +21,7 @@ import { cn } from "@renderer/lib/utils";
 
 import { SearchBar } from "./components/search-bar";
 import { CommandPalette } from "./components/command-palette";
+import { OverviewDialog } from "./components/overview-dialog";
 import { useLogProcessing } from "./hooks/use-log-processing";
 import { useLogSearch } from "./hooks/use-log-search";
 import { useLogFilter } from "./hooks/use-log-filter";
@@ -86,6 +89,13 @@ function RouteComponent() {
     () => (logStructure[selectedFileName ?? ""] ?? []).map(sectionNameOf),
     [logStructure, selectedFileName]
   );
+  // Boots and the first occurrence of each consequential finding, marked on
+  // the strip so the shape of the session is readable at a glance.
+  const events = useMemo(() => {
+    const sessions = detectBootSessions(allLogs);
+    return timelineEvents(sessions, runRules(allLogs));
+  }, [allLogs]);
+
   const levelNames = useMemo(
     () => Object.keys(levelCounts).filter((name) => name !== "NONE"),
     [levelCounts]
@@ -203,7 +213,7 @@ function RouteComponent() {
           onToggleMerge={() => setIsMergedView((merged) => !merged)}
         />
 
-        <TimelineStrip logs={allLogs} />
+        <TimelineStrip logs={allLogs} events={events} />
 
         <div className="px-2 py-1.5 border-b bg-background shrink-0 flex items-center gap-1.5">
           <button
@@ -220,6 +230,17 @@ function RouteComponent() {
             <Clock className="size-3" />
             Merge
           </button>
+
+          <OverviewDialog
+            logs={allLogs}
+            fileName={selectedFileName}
+            onJumpToLog={(log) => {
+              const index = visibleLogs.indexOf(log);
+              if (index >= 0) {
+                virtuosoRef.current?.scrollToIndex({ index, align: "center" });
+              }
+            }}
+          />
 
           <div className="h-4 w-px bg-border" />
 

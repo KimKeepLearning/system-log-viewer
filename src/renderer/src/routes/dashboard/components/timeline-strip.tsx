@@ -3,6 +3,7 @@ import { useAtom, useAtomValue } from "jotai";
 import { X } from "lucide-react";
 import { cn } from "@renderer/lib/utils";
 import { selectedTimeAtom, timeRangeAtom } from "@renderer/lib/atom";
+import { TimelineEvent } from "@renderer/lib/log-analysis";
 import { ExtendedLog } from "../types";
 
 const BUCKET_COUNT = 160;
@@ -50,13 +51,25 @@ const dayBoundaries = (min: number, max: number): number[] => {
   return ticks;
 };
 
+const EVENT_COLOR: Record<TimelineEvent["severity"], string> = {
+  critical: "bg-red-500",
+  warning: "bg-amber-500",
+  info: "bg-sky-500"
+};
+
 /**
  * An incident usually shows up as a spike in how much the machine had to say,
  * so plotting volume over time turns "when did this happen" into something you
  * can see rather than scroll for. Dragging across it narrows the log to that
- * window.
+ * window and rescales the strip to it.
  */
-export const TimelineStrip = ({ logs }: { logs: ExtendedLog[] }) => {
+export const TimelineStrip = ({
+  logs,
+  events = []
+}: {
+  logs: ExtendedLog[];
+  events?: TimelineEvent[];
+}) => {
   const [timeRange, setTimeRange] = useAtom(timeRangeAtom);
   const selectedTime = useAtomValue(selectedTimeAtom);
   const trackRef = useRef<HTMLDivElement>(null);
@@ -206,6 +219,27 @@ export const TimelineStrip = ({ logs }: { logs: ExtendedLog[] }) => {
               style={{ left: `${selectionLeft}%`, width: `${selectionWidth}%` }}
             />
           )}
+
+          {/* Boots and the first of each consequential finding. */}
+          {events.map((event) => {
+            const left = ratioOf(event.ts);
+            if (left < 0 || left > 100) return null;
+            return (
+              <div
+                key={`${event.ts}-${event.label}`}
+                className="absolute top-0 bottom-0 pointer-events-none"
+                style={{ left: `${left}%` }}
+                title={`${formatMoment(event.ts, model.multiDay)} — ${event.label}`}
+              >
+                <div
+                  className={cn(
+                    "absolute top-0 size-1.5 -left-0.75 rotate-45",
+                    EVENT_COLOR[event.severity]
+                  )}
+                />
+              </div>
+            );
+          })}
 
           {/* Where the selected line sits in the session. */}
           {selectedTime !== null && selectedTime >= model.min && selectedTime <= model.max && (
