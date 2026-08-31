@@ -1,10 +1,14 @@
 import { contextBridge, webUtils, ipcRenderer } from "electron";
 import { electronAPI } from "@electron-toolkit/preload";
+import type { ExtractedLogFile } from "../main/archive";
 
 // Custom APIs for renderer
 const api = {
   getPathForFile: (file: File): string => {
     return webUtils.getPathForFile(file);
+  },
+  readLogFile: (filePath: string): Promise<ExtractedLogFile[]> => {
+    return ipcRenderer.invoke("read-file", filePath);
   },
   readRemoteFile: (config: any, filePath: string): Promise<string> => {
     return ipcRenderer.invoke("ssh:read-file", config, filePath);

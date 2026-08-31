@@ -1,11 +1,10 @@
 import { app, shell, BrowserWindow, ipcMain } from "electron";
 import { join } from "path";
-import * as fs from "fs";
-import AdmZip from "adm-zip";
 import { electronApp, optimizer, is } from "@electron-toolkit/utils";
 import icon from "../../resources/icon.png?asset";
 const { updateElectronApp } = require("update-electron-app");
 import { registerSSHHandlers } from "./ssh";
+import { readLogFile } from "./archive";
 
 registerSSHHandlers();
 
@@ -66,87 +65,16 @@ app.whenReady().then(() => {
   // IPC test
   ipcMain.on("ping", () => console.log("pong"));
 
-  ipcMain.handle("read-file", (_, filePath) => {
+  ipcMain.handle("read-file", (_, filePath: string) => {
     console.log("[Main] Received read-file request for:", filePath);
-    try {
-      if (!fs.existsSync(filePath)) {
-        console.error("[Main] File does not exist:", filePath);
-        return "Error: File does not exist";
-      }
-
-      // Handle zip files
-      if (filePath.toLowerCase().endsWith(".zip")) {
-        console.log("[Main] Detected zip file, attempting to extract system_logs.txt");
-        try {
-          const zip = new AdmZip(filePath);
-          const zipEntries = zip.getEntries();
-
-          console.log("[Main] Zip entries count:", zipEntries.length);
-
-          const isSystemLogFile = (entry: AdmZip.IZipEntry): boolean => {
-            if (entry.isDirectory) return false;
-            const normalizedName = entry.entryName.replace(/\\/g, "/");
-            if (normalizedName.toLowerCase().includes("__macosx") || entry.name.startsWith("._")) {
-              return false;
-            }
-
-            const fileName = entry.entryName.split("/").pop()?.toLowerCase().trim();
-            return fileName === "system_logs.txt" || fileName === "system_logs";
-          };
-
-          // Try to find system_logs.txt directly
-          let logEntry = zipEntries.find(isSystemLogFile);
-
-          // If not found, try to find system_logs.zip and look inside
-          if (!logEntry) {
-            console.log("[Main] system_logs.txt not found, looking for nested system_logs.zip...");
-            const nestedZipEntry = zipEntries.find((entry) => {
-              const normalizedName = entry.entryName.replace(/\\/g, "/");
-              const fileName = normalizedName.split("/").pop()?.toLowerCase().trim();
-              return (
-                fileName === "system_logs.zip" &&
-                !entry.isDirectory &&
-                !normalizedName.toLowerCase().includes("__macosx")
-              );
-            });
-
-            if (nestedZipEntry) {
-              console.log("[Main] Found nested system_logs.zip, extracting...");
-              try {
-                const nestedZip = new AdmZip(nestedZipEntry.getData());
-                const nestedEntries = nestedZip.getEntries();
-                logEntry = nestedEntries.find(isSystemLogFile);
-                if (logEntry) {
-                  console.log("[Main] Found system_logs.txt inside nested zip");
-                }
-              } catch (err) {
-                console.error("[Main] Error reading nested zip:", err);
-              }
-            }
-          }
-
-          if (logEntry) {
-            console.log("[Main] Found system_logs.txt in zip:", logEntry.entryName);
-            const content = logEntry.getData().toString("utf8");
-            console.log("[Main] Extracted content length:", content.length);
-            return content;
-          } else {
-            console.warn("[Main] system_logs.txt not found in zip");
-            return "Error: system_logs.txt not found in the uploaded zip file.";
-          }
-        } catch (zipError) {
-          console.error("[Main] Error processing zip file:", zipError);
-          return `Error processing zip file: ${zipError}`;
-        }
-      }
-
-      const content = fs.readFileSync(filePath, "utf-8");
-      console.log("[Main] File read successfully, length:", content.length);
-      return content;
-    } catch (e) {
-      console.error("[Main] Error reading file:", e);
-      return `Error reading file: ${e}`;
-    }
+    // Errors reject the renderer's promise rather than being returned as
+    // content, which used to turn a failure into a one-line "log file".
+    const files = readLogFile(filePath);
+    console.log(
+      "[Main] Extracted:",
+      files.map((file) => `${file.name} (${file.content.length})`)
+    );
+    return files;
   });
 
   createWindow();

@@ -1,11 +1,51 @@
-import { LogFileContext, IUserLog } from "./typings";
+import { LogFileContext, IUserLog, SectionStats } from "./typings";
 import { parseLogLine, extractSectionsRawAsync } from "./log-parser";
+import { deriveBootAnchor } from "./log-time";
 
 export interface ProcessedLogData {
   parsedLogs: Record<string, IUserLog[]>;
   structure: Record<string, string[]>;
   updatedFiles: LogFileContext[];
+  sectionStats: Record<string, SectionStats>;
 }
+
+/**
+ * ChromeOS caps how much of a section it writes and cuts the last line wherever
+ * the cap happened to fall -- chrome_system_log commonly ends mid-word. A source
+ * bracket that opens and never closes proves it, and lets the reader tell a
+ * truncated line from a genuinely short one.
+ *
+ * A cut that lands mid-word instead is indistinguishable from a normal line and
+ * stays unmarked; this catches the common case, not every case.
+ */
+const markIfCutOff = (logs: IUserLog[]): void => {
+  const last = logs[logs.length - 1];
+  if (last && last.message.startsWith("[") && !last.message.includes("]")) {
+    last.truncated = true;
+  }
+};
+
+const summarize = (logs: IUserLog[]): SectionStats => {
+  const stats: SectionStats = {
+    lines: logs.length,
+    errors: 0,
+    warnings: 0,
+    firstTs: null,
+    lastTs: null
+  };
+
+  for (const log of logs) {
+    if (log.level === "ERROR") stats.errors++;
+    else if (log.level === "WARN") stats.warnings++;
+
+    if (log.tsKind === "wall" && typeof log.ts === "number") {
+      if (stats.firstTs === null || log.ts < stats.firstTs) stats.firstTs = log.ts;
+      if (stats.lastTs === null || log.ts > stats.lastTs) stats.lastTs = log.ts;
+    }
+  }
+
+  return stats;
+};
 
 const LINES_CHUNK_SIZE = 5000;
 
@@ -55,6 +95,33 @@ async function parseContentByLines(
   return logs;
 }
 
+/**
+ * Kernel logs count seconds since boot while everything else records wall
+ * clock, so on their own they cannot be interleaved. The syslog section relays
+ * kernel messages with both clocks attached, which is enough to place monotonic
+ * zero on the wall-clock timeline and shift the kernel entries onto it.
+ */
+function anchorMonotonicLogs(
+  parsedLogs: Record<string, IUserLog[]>,
+  sectionKeys: string[],
+  rawSections: { key: string; rawContent: string }[]
+): void {
+  const syslog = rawSections.find((section) => section.key === "syslog");
+  if (!syslog) return;
+
+  const anchor = deriveBootAnchor(syslog.rawContent);
+  if (!anchor) return;
+
+  for (const key of sectionKeys) {
+    for (const log of parsedLogs[key] ?? []) {
+      if (log.tsKind === "monotonic" && log.ts !== null && log.ts !== undefined) {
+        log.ts += anchor.bootEpochUs;
+        log.tsKind = "wall";
+      }
+    }
+  }
+}
+
 export async function processFilesAsync(
   files: LogFileContext[],
   onProgress: (status: string) => void
@@ -62,6 +129,7 @@ export async function processFilesAsync(
   const parsedLogs: Record<string, IUserLog[]> = {};
   const structure: Record<string, string[]> = {};
   const updatedFiles: LogFileContext[] = [];
+  const sectionStats: Record<string, SectionStats> = {};
 
   // Track seen file names to handle duplicates
   const seenNames = new Map<string, number>();
@@ -78,6 +146,11 @@ export async function processFilesAsync(
     seenNames.set(file.name, count + 1);
 
     updatedFiles.push({ ...file, name: displayName });
+
+    // Images are kept for the screenshot viewer but have nothing to parse, and
+    // giving them a (always empty) entry in the structure would only clutter
+    // the log sidebar.
+    if (file.imageDataUrl) continue;
 
     onProgress(`Processing ${displayName} (${i + 1}/${files.length})...`);
     await sleep(20);
@@ -115,9 +188,15 @@ export async function processFilesAsync(
           await sleep(5);
         });
 
+        markIfCutOff(logs);
         parsedLogs[uniqueKey] = logs;
         sections.push(uniqueKey);
       }
+
+      // Stats are taken after anchoring so the kernel sections report the wall
+      // clock range the timeline will actually place them at.
+      anchorMonotonicLogs(parsedLogs, sections, rawSections);
+      for (const key of sections) sectionStats[key] = summarize(parsedLogs[key]);
     } else if (file.content.trim().length > 0) {
       // Fallback: Line-by-line parsing
       onProgress(`Parsing ${displayName} content...`);
@@ -131,13 +210,15 @@ export async function processFilesAsync(
       });
 
       if (logs.length > 0) {
+        markIfCutOff(logs);
         parsedLogs[uniqueKey] = logs;
         sections.push(uniqueKey);
+        sectionStats[uniqueKey] = summarize(logs);
       }
     }
 
     structure[displayName] = sections;
   }
 
-  return { parsedLogs, structure, updatedFiles };
+  return { parsedLogs, structure, updatedFiles, sectionStats };
 }

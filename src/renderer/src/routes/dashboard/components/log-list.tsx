@@ -13,10 +13,17 @@ import {
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
   ContextMenuTrigger
 } from "@renderer/components/ui/context-menu";
 import { buildLogText, countLogLines } from "@renderer/lib/log-utils";
-import { useCallback, useRef } from "react";
+import { sectionNameOf } from "@renderer/lib/log-domains";
+import { bookmarkKey, bookmarkKeysAtom, toggleBookmarkAtom } from "@renderer/lib/bookmarks";
+import { selectedTimeAtom } from "@renderer/lib/atom";
+import { useAtomValue, useSetAtom } from "jotai";
+import { useCallback, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import { rangeFromSelection, useCopyLogs } from "../hooks/use-copy-logs";
 import { useLogSelection } from "../hooks/use-log-selection";
@@ -31,8 +38,7 @@ interface LogListProps {
   isMergedView: boolean;
   expandedIds: Set<string>;
   onToggleExpand: (id: string) => void;
-  searchQuery: string;
-  isRegex: boolean;
+  patterns: RegExp[];
   virtuosoRef: React.RefObject<VirtuosoHandle | null>;
   highlightedIndex?: number;
 }
@@ -45,14 +51,33 @@ export const LogList = ({
   isMergedView,
   expandedIds,
   onToggleExpand,
-  searchQuery,
-  isRegex,
+  patterns,
   virtuosoRef,
   highlightedIndex
 }: LogListProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const { range, selectedCount, selectRow, selectRange, extendTo, isSelected } = useLogSelection();
   const handleCopy = useCopyLogs(logs, range);
+  const bookmarkKeys = useAtomValue(bookmarkKeysAtom);
+  const toggleBookmark = useSetAtom(toggleBookmarkAtom);
+  const setSelectedTime = useSetAtom(selectedTimeAtom);
+
+  // Selecting a row also points the timeline at it, so "where am I in the
+  // session" is answered without reading a timestamp.
+  const selectAndMark = useCallback(
+    (index: number) => {
+      selectRow(index);
+      setSelectedTime(typeof logs[index]?.ts === "number" ? (logs[index].ts as number) : null);
+    },
+    [logs, selectRow, setSelectedTime]
+  );
+
+  // Sections this view holds, for "jump to this time in ...".
+  const sectionKeys = useMemo(() => {
+    const seen = new Set<string>();
+    for (const log of logs) seen.add(log.sourceFile);
+    return [...seen];
+  }, [logs]);
 
   const copyLogs = useCallback((selected: ExtendedLog[], what: string) => {
     if (selected.length === 0) return;
@@ -77,13 +102,13 @@ export const LogList = ({
         // selection out from under it.
         const selection = window.getSelection();
         if (selection && !selection.isCollapsed) return;
-        selectRow(index);
+        selectAndMark(index);
       }
 
       // Cmd/Ctrl+C only reaches our handler if focus sits inside the container.
       containerRef.current?.focus({ preventScroll: true });
     },
-    [extendTo, selectRow]
+    [extendTo, selectAndMark]
   );
 
   const handleContextMenu = useCallback(
@@ -106,9 +131,9 @@ export const LogList = ({
 
       // Right-clicking outside the current range moves the selection to it,
       // the way a file list does; inside it, the range is kept.
-      if (!range || index < range.from || index > range.to) selectRow(index);
+      if (!range || index < range.from || index > range.to) selectAndMark(index);
     },
-    [range, selectRange, selectRow]
+    [range, selectRange, selectAndMark]
   );
 
   if (logs.length === 0) {
@@ -123,7 +148,42 @@ export const LogList = ({
 
   // Deliberately not materializing the selected rows here: the range can span
   // hundreds of thousands of entries and this component re-renders on scroll.
-  const anchorSection = range ? logs[range.from]?.sourceFile : undefined;
+  const anchorLog = range ? logs[range.from] : undefined;
+  const anchorSection = anchorLog?.sourceFile;
+
+  const jumpTargets =
+    anchorLog && typeof anchorLog.ts === "number"
+      ? sectionKeys.filter((key) => key !== anchorSection).map((key) => ({ key }))
+      : [];
+
+  /**
+   * Answers "the UI stalled here — what was the kernel doing?" by landing on
+   * the first line of another section at or after the selected instant.
+   */
+  const jumpToSectionAtTime = (sectionKey: string) => {
+    const target = anchorLog?.ts;
+    if (typeof target !== "number") return;
+
+    let best = -1;
+    let bestDelta = Infinity;
+    for (let index = 0; index < logs.length; index++) {
+      const log = logs[index];
+      if (log.sourceFile !== sectionKey || typeof log.ts !== "number") continue;
+      const delta = Math.abs(log.ts - target);
+      if (delta < bestDelta) {
+        bestDelta = delta;
+        best = index;
+      }
+    }
+
+    if (best === -1) {
+      toast.error(`${sectionNameOf(sectionKey)} has nothing on the clock`);
+      return;
+    }
+
+    selectAndMark(best);
+    virtuosoRef.current?.scrollToIndex({ index: best, align: "center" });
+  };
 
   return (
     <ContextMenu>
@@ -131,7 +191,7 @@ export const LogList = ({
         <div
           ref={containerRef}
           tabIndex={-1}
-          className="h-full outline-none"
+          className="flex-1 min-h-0 outline-none"
           onCopy={handleCopy}
           onContextMenu={handleContextMenu}
         >
@@ -144,7 +204,7 @@ export const LogList = ({
                 onActiveFileChange(log.sourceFile);
               }
             }}
-            className="h-[calc(100vh-140px)] scrollbar-container "
+            className="h-full scrollbar-container"
             itemContent={(index, log) => {
               // Highlight specific logs in merged view
               // chrome_user_log, chrome_system_log and their PREVIOUS variants
@@ -219,7 +279,7 @@ export const LogList = ({
                           highlightedIndex === index && "bg-yellow-100"
                         )}
                       >
-                        <LogRow log={log} query={searchQuery} isRegex={isRegex}>
+                        <LogRow log={log} patterns={patterns}>
                           <CollapsibleTrigger asChild>
                             <Badge
                               variant="secondary"
@@ -236,12 +296,7 @@ export const LogList = ({
                                 <div key={i} className="relative">
                                   {/* Connecting line visual */}
                                   <div className="border-b border-border/20 last:border-0">
-                                    <LogRow
-                                      log={dup}
-                                      query={searchQuery}
-                                      isRegex={isRegex}
-                                      isMain={false}
-                                    />
+                                    <LogRow log={dup} patterns={patterns} isMain={false} />
                                   </div>
                                 </div>
                               ))}
@@ -265,7 +320,7 @@ export const LogList = ({
                           highlightedIndex === index && "bg-yellow-100"
                         )}
                       >
-                        <LogRow log={log} query={searchQuery} isRegex={isRegex} />
+                        <LogRow log={log} patterns={patterns} />
                       </div>
                     </div>
                   )}
@@ -309,10 +364,34 @@ export const LogList = ({
         >
           Copy this section
         </ContextMenuItem>
-        <ContextMenuSeparator />
         <ContextMenuItem onSelect={() => copyLogs(logs, "lines")}>
           Copy everything in view ({logs.length.toLocaleString()} rows)
         </ContextMenuItem>
+
+        <ContextMenuSeparator />
+
+        <ContextMenuItem
+          disabled={!anchorLog}
+          onSelect={() => anchorLog && toggleBookmark(anchorLog)}
+        >
+          {anchorLog && bookmarkKeys.has(bookmarkKey(anchorLog))
+            ? "Remove bookmark"
+            : "Bookmark line"}
+        </ContextMenuItem>
+
+        {/* B5: the same instant, seen from another subsystem. */}
+        <ContextMenuSub>
+          <ContextMenuSubTrigger disabled={jumpTargets.length === 0}>
+            Jump to this time in
+          </ContextMenuSubTrigger>
+          <ContextMenuSubContent className="max-h-80 overflow-y-auto">
+            {jumpTargets.map((target) => (
+              <ContextMenuItem key={target.key} onSelect={() => jumpToSectionAtTime(target.key)}>
+                <span className="truncate">{sectionNameOf(target.key)}</span>
+              </ContextMenuItem>
+            ))}
+          </ContextMenuSubContent>
+        </ContextMenuSub>
       </ContextMenuContent>
     </ContextMenu>
   );

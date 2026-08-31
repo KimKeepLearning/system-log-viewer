@@ -22,29 +22,19 @@ export const useLogProcessing = (
       keysToProcess.forEach((key) => {
         const logs = parsedLogs[key] || [];
         logs.forEach((log) => {
-          // Requirement: Interleave logs with identifiable timestamps into chrome logs
-          // Strategy: Discard any log that doesn't have a valid timestamp, not even a random word
-          const ts = log.timestamp ? log.timestamp.trim() : "";
-          // Heuristic: Must have length, digits, and time separators to be a "timestamp" and not just "eth0:"
-          const hasTimeStructure =
-            ts.length > 5 &&
-            /\d/.test(ts) &&
-            (ts.includes(":") || ts.includes("-") || ts.includes("."));
-
-          if (hasTimeStructure) {
+          // Only entries the parser placed on the wall clock can be interleaved.
+          // Kernel entries qualify once log-processor has anchored them; ones
+          // still on the monotonic clock would sort decades before 1970.
+          if (log.tsKind === "wall" && typeof log.ts === "number") {
             logsToProcess.push({ key, log });
           }
         });
       });
 
-      // Sort by timestamp (Ascending: Oldest to Newest)
-      logsToProcess.sort((a, b) => {
-        const tA = a.log.timestamp || "";
-        const tB = b.log.timestamp || "";
-        if (tA < tB) return -1;
-        if (tA > tB) return 1;
-        return 0;
-      });
+      // Ascending: oldest to newest. Comparing the raw strings would be wrong —
+      // sections use different formats (trailing Z vs a -07:00 offset, differing
+      // fractional digits), so lexical order is not chronological order.
+      logsToProcess.sort((a, b) => (a.log.ts as number) - (b.log.ts as number));
     } else {
       keysToProcess.forEach((key) => {
         const logs = parsedLogs[key] || [];

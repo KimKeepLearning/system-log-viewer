@@ -1,34 +1,16 @@
 import { useMemo } from "react";
+import { buildMatcher, ParsedQuery } from "@renderer/lib/log-query";
 import { ExtendedLog } from "../types";
 
-export const useLogSearch = (allLogs: ExtendedLog[], searchQuery: string, isRegex: boolean) => {
-  return useMemo(() => {
-    if (!searchQuery) return [];
+/** Indices of the rows a query matches, for stepping through them in place. */
+export const useLogSearch = (allLogs: ExtendedLog[], parsed: ParsedQuery): number[] =>
+  useMemo(() => {
+    if (parsed.isEmpty) return [];
 
+    const matches = buildMatcher(parsed);
     const indices: number[] = [];
-    const queryLower = searchQuery.toLowerCase();
-
-    let regex: RegExp | null = null;
-    if (isRegex) {
-      try {
-        regex = new RegExp(searchQuery, "i");
-      } catch {
-        // invalid regex
-      }
+    for (let index = 0; index < allLogs.length; index++) {
+      if (matches(allLogs[index])) indices.push(index);
     }
-
-    allLogs.forEach((log, index) => {
-      // Build a search string similar to what the user sees
-      const content = [log.timestamp, log.level, log.process, log.source, log.message]
-        .filter(Boolean)
-        .join(" ");
-
-      if (regex) {
-        if (regex.test(content)) indices.push(index);
-      } else {
-        if (content.toLowerCase().includes(queryLower)) indices.push(index);
-      }
-    });
     return indices;
-  }, [allLogs, searchQuery, isRegex]);
-};
+  }, [allLogs, parsed]);

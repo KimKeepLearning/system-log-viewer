@@ -1,49 +1,58 @@
 import { ReactNode } from "react";
 
-export const HighlightedText = ({
-  text,
-  query,
-  isRegex
-}: {
-  text: string;
-  query: string;
-  isRegex: boolean;
-}) => {
-  if (!query || !text) return <span>{text}</span>;
+interface Span {
+  start: number;
+  end: number;
+}
 
-  try {
-    const effectiveQuery = isRegex ? query : query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const re = new RegExp(effectiveQuery, "gi");
+// Several patterns can hit the same characters, so overlapping spans are merged
+// before rendering; otherwise the nested marks paint over each other.
+const mergedSpans = (text: string, patterns: RegExp[]): Span[] => {
+  const spans: Span[] = [];
 
-    const elements: ReactNode[] = [];
-    let lastIndex = 0;
-    let match;
-
-    while ((match = re.exec(text)) !== null) {
-      if (match.index > lastIndex) {
-        elements.push(
-          <span key={`text-${lastIndex}`}>{text.substring(lastIndex, match.index)}</span>
-        );
+  for (const pattern of patterns) {
+    pattern.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(text)) !== null) {
+      if (match[0].length === 0) {
+        pattern.lastIndex++;
+        continue;
       }
-      elements.push(
-        <span key={`match-${match.index}`} className="bg-yellow-500/50 text-black">
-          {match[0]}
-        </span>
-      );
-      lastIndex = re.lastIndex;
-      if (re.lastIndex === match.index) {
-        re.lastIndex++; // Avoid infinite loop for zero-width assertions
-      }
+      spans.push({ start: match.index, end: match.index + match[0].length });
     }
-
-    if (lastIndex < text.length) {
-      elements.push(<span key={`text-${lastIndex}`}>{text.substring(lastIndex)}</span>);
-    }
-
-    if (elements.length === 0) return <span>{text}</span>;
-
-    return <span>{elements}</span>;
-  } catch {
-    return <span>{text}</span>;
   }
+
+  if (spans.length === 0) return spans;
+  spans.sort((a, b) => a.start - b.start);
+
+  const merged: Span[] = [spans[0]];
+  for (const span of spans.slice(1)) {
+    const last = merged[merged.length - 1];
+    if (span.start <= last.end) last.end = Math.max(last.end, span.end);
+    else merged.push(span);
+  }
+  return merged;
+};
+
+export const HighlightedText = ({ text, patterns }: { text: string; patterns: RegExp[] }) => {
+  if (patterns.length === 0 || !text) return <>{text}</>;
+
+  const spans = mergedSpans(text, patterns);
+  if (spans.length === 0) return <>{text}</>;
+
+  const parts: ReactNode[] = [];
+  let cursor = 0;
+
+  for (const span of spans) {
+    if (span.start > cursor) parts.push(text.slice(cursor, span.start));
+    parts.push(
+      <mark key={span.start} className="bg-yellow-400/60 text-inherit rounded-[2px] px-px">
+        {text.slice(span.start, span.end)}
+      </mark>
+    );
+    cursor = span.end;
+  }
+  if (cursor < text.length) parts.push(text.slice(cursor));
+
+  return <>{parts}</>;
 };

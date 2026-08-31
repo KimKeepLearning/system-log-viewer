@@ -5,32 +5,39 @@ import {
   logKeysAtom,
   parsedLogsMapAtom,
   searchQueryAtom,
-  isRegexAtom,
   searchMatchesCountAtom,
   currentMatchIndexAtom,
   logFilesAtom
 } from "@renderer/lib/atom";
-import { parseDeviceInfo } from "@renderer/lib/log-parser";
+import { extractLogSection, parseDeviceInfo } from "@renderer/lib/log-parser";
+import { hierarchyKindOf } from "@renderer/lib/ui-hierarchy";
+import { highlightPatterns, parseQuery } from "@renderer/lib/log-query";
+import { looksLikeHistograms } from "@renderer/lib/log-histograms";
+import { sectionNameOf } from "@renderer/lib/log-domains";
+import { detectBootSessions, lifecycleEvents, timelineEvents } from "@renderer/lib/log-analysis";
+import { runRules } from "@renderer/lib/log-rules";
 import { useRef, useState, useEffect, useCallback, useMemo } from "react";
 import { VirtuosoHandle } from "react-virtuoso";
-import { Checkbox } from "@renderer/components/ui/checkbox";
+import { Clock } from "lucide-react";
+import { cn } from "@renderer/lib/utils";
 
+import { SearchBar } from "./components/search-bar";
+import { CommandPalette } from "./components/command-palette";
+import { OverviewPanel } from "./components/overview-panel";
+import { MetricsView } from "./components/metrics-view";
+import { HierarchyView } from "./components/hierarchy-view";
 import { useLogProcessing } from "./hooks/use-log-processing";
 import { useLogSearch } from "./hooks/use-log-search";
+import { useLogFilter } from "./hooks/use-log-filter";
 import { FileSidebar } from "./components/file-sidebar";
+import { FilterBar } from "./components/filter-bar";
+import { TimelineStrip } from "./components/timeline-strip";
+import { SearchResultsPanel } from "./components/search-results-panel";
 import { LogList } from "./components/log-list";
 
 export const Route = createFileRoute("/dashboard/main")({
   component: RouteComponent
 });
-
-const Tag = ({ children }: { children: React.ReactNode }) => {
-  return (
-    <div className="text-[10px] font-medium bg-muted text-muted-foreground rounded-sm border border-border px-1.5 py-0.5">
-      {children}
-    </div>
-  );
-};
 
 function RouteComponent() {
   const logStructure = useAtomValue(logStructureAtom);
@@ -39,29 +46,50 @@ function RouteComponent() {
   const logFiles = useAtomValue(logFilesAtom);
 
   const virtuosoRef = useRef<VirtuosoHandle>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
   const [activeFile, setActiveFile] = useState<string | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [pendingScrollKey, setPendingScrollKey] = useState<string | null>(null);
   const [isMergedView, setIsMergedView] = useState(false);
+  const [isResultsOpen, setIsResultsOpen] = useState(false);
+  const [hierarchyKey, setHierarchyKey] = useState<string | null>(null);
+  // What the log says comes before the log itself, so this is where you land.
+  const [view, setView] = useState<"overview" | "log">("overview");
 
   const [searchQuery] = useAtom(searchQueryAtom);
-  const [isRegex] = useAtom(isRegexAtom);
+  const parsedQuery = useMemo(() => parseQuery(searchQuery), [searchQuery]);
+  const patterns = useMemo(() => highlightPatterns(parsedQuery), [parsedQuery]);
   const setMatchesCount = useSetAtom(searchMatchesCountAtom);
   const [currentMatchIndex] = useAtom(currentMatchIndexAtom);
+  // histograms.txt is a table of distributions, not a log; rendering it in the
+  // log list produced one unreadable row of JSON.
+  const metricsContent = useMemo(() => {
+    const file = logFiles.find((entry) => entry.name === selectedFileName);
+    if (!file || file.imageDataUrl) return null;
+    return looksLikeHistograms(file.content) ? file.content : null;
+  }, [logFiles, selectedFileName]);
+
+  const hierarchy = useMemo(() => {
+    if (!hierarchyKey) return null;
+    const sectionName = sectionNameOf(hierarchyKey);
+    const kind = hierarchyKindOf(sectionName);
+    const file = logFiles.find((entry) => entry.name === hierarchyKey.split("::")[0]);
+    if (!kind || !file) return null;
+    return { kind, sectionName, content: extractLogSection(file.content, sectionName) };
+  }, [hierarchyKey, logFiles]);
+
+  // The device is a property of the archive, not of whichever file is open:
+  // reading it from the selection made the header say "Unknown board" as soon
+  // as you clicked histograms.txt, which carries no device fields.
   const deviceInfo = useMemo(() => {
-    // If no file selected, or files list is empty
-    if (!selectedFileName) {
-      console.log("No selected file name", selectedFileName);
-      return { board: undefined, version: undefined, arcStatus: undefined };
+    for (const file of logFiles) {
+      if (file.imageDataUrl) continue;
+      const info = parseDeviceInfo(file.content);
+      if (info.board && info.board !== "unknown") return info;
     }
-    const file = logFiles.find((f) => f.name === selectedFileName);
-    if (!file) {
-      console.log("Selected file not found in logFiles", selectedFileName, logFiles);
-      return { board: undefined, version: undefined, arcStatus: undefined };
-    }
-    return parseDeviceInfo(file.content);
-  }, [selectedFileName, logFiles]);
+    return { board: undefined, version: undefined, arcStatus: undefined };
+  }, [logFiles]);
   // Default select first file
   useEffect(() => {
     const files = Object.keys(logStructure);
@@ -74,15 +102,41 @@ function RouteComponent() {
   }, [logStructure, selectedFileName]);
 
   // Use Custom Hook for Log Processing
-  const { allLogs, fileIndices } = useLogProcessing(
-    selectedFileName,
-    isMergedView,
-    logStructure,
-    parsedLogs
+  const { allLogs } = useLogProcessing(selectedFileName, isMergedView, logStructure, parsedLogs);
+
+  const { logs: visibleLogs, processes, levelCounts } = useLogFilter(allLogs, parsedQuery);
+
+  // Section names for the search bar's section: completion.
+  const sectionNames = useMemo(
+    () => (logStructure[selectedFileName ?? ""] ?? []).map(sectionNameOf),
+    [logStructure, selectedFileName]
+  );
+  // Boots and the first occurrence of each consequential finding, marked on
+  // the strip so the shape of the session is readable at a glance.
+  const events = useMemo(() => {
+    const sessions = detectBootSessions(allLogs);
+    return timelineEvents(sessions, runRules(allLogs), lifecycleEvents(allLogs));
+  }, [allLogs]);
+
+  const levelNames = useMemo(
+    () => Object.keys(levelCounts).filter((name) => name !== "NONE"),
+    [levelCounts]
   );
 
+  // Section offsets have to follow the filtered list, otherwise the sidebar
+  // jumps to whatever now sits at the unfiltered index.
+  const fileIndices = useMemo(() => {
+    const indices: Record<string, number> = {};
+    if (isMergedView) return indices;
+    for (let index = 0; index < visibleLogs.length; index++) {
+      const key = visibleLogs[index].sourceFile;
+      if (indices[key] === undefined) indices[key] = index;
+    }
+    return indices;
+  }, [visibleLogs, isMergedView]);
+
   // Use Custom Hook for Search
-  const matchIndices = useLogSearch(allLogs, searchQuery, isRegex);
+  const matchIndices = useLogSearch(visibleLogs, parsedQuery);
 
   // Handle pending scroll after view update
   useEffect(() => {
@@ -97,6 +151,16 @@ function RouteComponent() {
 
   const scrollToSection = useCallback(
     (key: string) => {
+      // The three hierarchy sections are trees, not runs of lines; scrolling to
+      // them in the log list only ever showed their indentation.
+      if (hierarchyKindOf(sectionNameOf(key))) {
+        setHierarchyKey(key);
+        return;
+      }
+      setHierarchyKey(null);
+      // Picking a section means you want to read it.
+      setView("log");
+
       const fileName = key.split("::")[0];
       if (fileName !== selectedFileName) {
         setSelectedFileName(fileName);
@@ -155,46 +219,156 @@ function RouteComponent() {
         logStructure={logStructure}
         selectedFileName={selectedFileName}
         activeFile={activeFile}
+        deviceInfo={deviceInfo}
         onSelectFile={setSelectedFileName}
         onScrollToSection={scrollToSection}
       />
 
       {/* Main Content */}
-      <div className="flex-1 overflow-hidden relative bg-background">
-        <div className="flex items-center gap-1 p-2 border-b bg-background z-10">
-          <Tag>Board: {deviceInfo.board || "Unknown"}</Tag>
-          <Tag>OS Version: {deviceInfo.version || "Unknown"}</Tag>
-          <Tag>ARC Status: {deviceInfo.arcStatus || "Unknown"}</Tag>
+      <div className="flex-1 overflow-hidden relative bg-background flex flex-col min-w-0">
+        {metricsContent ? (
+          <MetricsView content={metricsContent} />
+        ) : hierarchy ? (
+          <>
+            <div className="px-2 py-1.5 border-b flex items-center gap-2 shrink-0">
+              <span className="text-sm font-semibold truncate">{hierarchy.sectionName}</span>
+              <button
+                type="button"
+                onClick={() => setHierarchyKey(null)}
+                className="ml-auto h-6 px-2 rounded-md text-xs text-muted-foreground hover:bg-muted shrink-0"
+              >
+                Show as log
+              </button>
+            </div>
+            <HierarchyView content={hierarchy.content} kind={hierarchy.kind} />
+          </>
+        ) : (
+          <>
+            {/* One switch, always in the same place, so neither view is buried. */}
+            <div className="px-2 py-1.5 border-b bg-background shrink-0 flex items-center gap-2">
+              <div className="flex rounded-md border p-0.5 shrink-0">
+                {(["overview", "log"] as const).map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => setView(option)}
+                    className={cn(
+                      "h-5 px-2.5 rounded text-xs font-medium capitalize transition-colors",
+                      view === option
+                        ? "bg-primary/10 text-primary"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    {option}
+                  </button>
+                ))}
+              </div>
 
-          <div className="h-4 w-px bg-border/50 mx-2" />
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="merged-view"
-              checked={isMergedView}
-              onCheckedChange={(c) => setIsMergedView(!!c)}
-            />
-            <label
-              htmlFor="merged-view"
-              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer text-muted-foreground select-none"
-            >
-              Merge with timestamp
-            </label>
-          </div>
-        </div>
+              {view === "log" && (
+                <SearchBar
+                  parsed={parsedQuery}
+                  matchCount={matchIndices.length}
+                  processes={processes}
+                  sections={sectionNames}
+                  levels={levelNames}
+                  inputRef={searchInputRef}
+                />
+              )}
+            </div>
 
-        <LogList
-          logs={allLogs}
-          fileIndices={fileIndices}
-          activeFile={activeFile}
-          onActiveFileChange={setActiveFile}
-          isMergedView={isMergedView}
-          expandedIds={expandedIds}
-          onToggleExpand={toggleExpand}
-          searchQuery={searchQuery}
-          isRegex={isRegex}
-          virtuosoRef={virtuosoRef}
-          highlightedIndex={activeMatchLogIndex}
-        />
+            {view === "overview" ? (
+              <OverviewPanel
+                logs={allLogs}
+                fileName={selectedFileName}
+                onJumpToLog={(log) => {
+                  const index = visibleLogs.indexOf(log);
+                  setView("log");
+                  if (index >= 0) {
+                    // The list has to exist before it can be scrolled.
+                    window.setTimeout(
+                      () => virtuosoRef.current?.scrollToIndex({ index, align: "center" }),
+                      0
+                    );
+                  }
+                }}
+              />
+            ) : (
+              <>
+                <div className="hidden">
+                  <SearchBar
+                    parsed={parsedQuery}
+                    matchCount={matchIndices.length}
+                    processes={processes}
+                    sections={sectionNames}
+                    levels={levelNames}
+                    inputRef={searchInputRef}
+                  />
+                </div>
+
+                <CommandPalette
+                  sectionKeys={logStructure[selectedFileName ?? ""] ?? []}
+                  onGoToSection={scrollToSection}
+                  onFocusSearch={() => {
+                    // The search box only exists in the log view.
+                    setView("log");
+                    window.setTimeout(() => searchInputRef.current?.focus(), 0);
+                  }}
+                  onToggleMerge={() => setIsMergedView((merged) => !merged)}
+                />
+
+                <TimelineStrip logs={allLogs} events={events} />
+
+                <div className="px-2 py-1.5 border-b bg-background shrink-0 flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setIsMergedView(!isMergedView)}
+                    className={cn(
+                      "h-6 px-2 rounded-md text-xs font-medium inline-flex items-center gap-1.5 transition-colors border shrink-0",
+                      isMergedView
+                        ? "border-primary/60 bg-primary/10 text-primary"
+                        : "border-transparent bg-muted/40 text-muted-foreground hover:bg-muted"
+                    )}
+                    title="Interleave every section on one timeline"
+                  >
+                    <Clock className="size-3" />
+                    Merge
+                  </button>
+
+                  <FilterBar
+                    levelCounts={levelCounts}
+                    processes={processes}
+                    visibleCount={visibleLogs.length}
+                    totalCount={allLogs.length}
+                  />
+                </div>
+
+                <LogList
+                  logs={visibleLogs}
+                  fileIndices={fileIndices}
+                  activeFile={activeFile}
+                  onActiveFileChange={setActiveFile}
+                  isMergedView={isMergedView}
+                  expandedIds={expandedIds}
+                  onToggleExpand={toggleExpand}
+                  patterns={patterns}
+                  virtuosoRef={virtuosoRef}
+                  highlightedIndex={activeMatchLogIndex}
+                />
+
+                <SearchResultsPanel
+                  logs={visibleLogs}
+                  matchIndices={matchIndices}
+                  activeMatchIndex={activeMatchLogIndex}
+                  isOpen={isResultsOpen}
+                  onToggle={() => setIsResultsOpen(!isResultsOpen)}
+                  onJumpTo={(index) =>
+                    virtuosoRef.current?.scrollToIndex({ index, align: "center", behavior: "auto" })
+                  }
+                />
+              </>
+            )}
+          </>
+        )}
       </div>
     </div>
   );

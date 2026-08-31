@@ -7,18 +7,13 @@ import { getLevelColor } from "@renderer/lib/log-utils";
 interface LogRowProps {
   log: IUserLog;
   isMain?: boolean;
-  query?: string;
-  isRegex?: boolean;
+  patterns?: RegExp[];
   children?: React.ReactNode;
 }
 
-export const LogRow = ({
-  log,
-  isMain = true,
-  query = "",
-  isRegex = false,
-  children
-}: LogRowProps) => (
+const NO_PATTERNS: RegExp[] = [];
+
+export const LogRow = ({ log, isMain = true, patterns = NO_PATTERNS, children }: LogRowProps) => (
   <div
     className={cn(
       "text-text-primary font-mono text-xs flex gap-2 py-1 border-b border-border/50 last:border-0 items-start min-h-7.5",
@@ -45,21 +40,29 @@ export const LogRow = ({
     )}
     {log.timestamp && (
       <span data-log-field="timestamp" className="text-muted-foreground shrink-0 min-w-45 pt-0.5">
-        <HighlightedText text={log.timestamp} query={query} isRegex={isRegex} />
+        <HighlightedText text={log.timestamp} patterns={patterns} />
       </span>
     )}
     <span className="flex-1 text-text-secondary min-w-0">
       <div className="whitespace-pre-wrap break-all">
         {log.source && (
           <span data-log-field="source" className="text-muted-foreground mr-1 select-text">
-            [<HighlightedText text={log.source} query={query} isRegex={isRegex} />]
+            [<HighlightedText text={log.source} patterns={patterns} />]
           </span>
         )}
         <span data-log-field="message" className="text-text-primary font-medium select-text">
           <b>
-            <HighlightedText text={log.message} query={query} isRegex={isRegex} />
+            <HighlightedText text={log.message} patterns={patterns} />
           </b>
         </span>
+        {log.truncated && (
+          <span
+            className="ml-1.5 text-[10px] font-sans font-normal text-muted-foreground border border-dashed border-border rounded px-1 py-px align-middle select-none"
+            title="ChromeOS caps each section's size and cut this line where the cap fell"
+          >
+            cut off by the capture
+          </span>
+        )}
         {children}
       </div>
     </span>
