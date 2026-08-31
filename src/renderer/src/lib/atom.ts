@@ -1,5 +1,5 @@
 import { atom } from "jotai";
-import { DeviceInfo, IUserLog, LogFileContext } from "./typings";
+import { DeviceInfo, IUserLog, LogFileContext, SectionStats } from "./typings";
 import { parseDeviceInfo } from "./log-parser";
 
 // Raw log files
@@ -44,11 +44,13 @@ export const setProcessedLogsAtom = atom(
       files: LogFileContext[];
       parsedLogs: Record<string, IUserLog[]>;
       structure: Record<string, string[]>;
+      sectionStats: Record<string, SectionStats>;
     }
   ) => {
     set(logFilesAtom, data.files);
     set(parsedLogsMapAtom, data.parsedLogs);
     set(logStructureAtom, data.structure);
+    set(sectionStatsAtom, data.sectionStats);
   }
 );
 
@@ -64,3 +66,42 @@ export const isRegexAtom = atom<boolean>(false);
 export const searchMatchesCountAtom = atom<number>(0);
 export const currentMatchIndexAtom = atom<number>(0);
 export const activeTabAtom = atom<string>("");
+
+/**
+ * "highlight" walks matches in place, which is what the viewer has always done.
+ * "filter" drops everything else, which is the only way to get from a few
+ * hundred thousand lines down to the handful worth reading.
+ */
+export type SearchMode = "highlight" | "filter";
+export const searchModeAtom = atom<SearchMode>("highlight");
+
+export type LogLevelName = "ERROR" | "WARN" | "INFO" | "DEBUG";
+
+// An empty set means "no level filter", not "hide everything" — that way the
+// filter starts off showing the whole log.
+export const levelFilterAtom = atom<Set<LogLevelName>>(new Set<LogLevelName>());
+export const processFilterAtom = atom<Set<string>>(new Set<string>());
+
+/** Section keys to show; empty means every section of the selected file. */
+export const sectionFilterAtom = atom<Set<string>>(new Set<string>());
+
+/** Inclusive epoch-microsecond window, set by dragging across the timeline. */
+export const timeRangeAtom = atom<{ from: number; to: number } | null>(null);
+
+export const sectionStatsAtom = atom<Record<string, SectionStats>>({});
+
+export const hasActiveFiltersAtom = atom(
+  (get) =>
+    get(levelFilterAtom).size > 0 ||
+    get(processFilterAtom).size > 0 ||
+    get(sectionFilterAtom).size > 0 ||
+    get(timeRangeAtom) !== null ||
+    (get(searchModeAtom) === "filter" && get(searchQueryAtom).length > 0)
+);
+
+export const clearFiltersAtom = atom(null, (_get, set) => {
+  set(levelFilterAtom, new Set<LogLevelName>());
+  set(processFilterAtom, new Set<string>());
+  set(sectionFilterAtom, new Set<string>());
+  set(timeRangeAtom, null);
+});

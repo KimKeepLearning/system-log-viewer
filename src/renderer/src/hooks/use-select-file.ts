@@ -20,14 +20,18 @@ export const useSelectFile = () => {
     try {
       const processedFiles = await readFiles(files);
       if (processedFiles && processedFiles.length > 0) {
-        const { parsedLogs, structure } = await processFilesAsync(processedFiles, (msg) => {
-          setProgressStatus(msg);
-        });
+        const { parsedLogs, structure, updatedFiles, sectionStats } = await processFilesAsync(
+          processedFiles,
+          (msg) => {
+            setProgressStatus(msg);
+          }
+        );
 
         setProcessedLogs({
-          files: processedFiles,
+          files: updatedFiles,
           parsedLogs,
-          structure
+          structure,
+          sectionStats
         });
 
         navigate({ to: "/dashboard/main" });

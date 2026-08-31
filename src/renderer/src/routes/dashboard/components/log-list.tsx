@@ -131,7 +131,7 @@ export const LogList = ({
         <div
           ref={containerRef}
           tabIndex={-1}
-          className="h-full outline-none"
+          className="flex-1 min-h-0 outline-none"
           onCopy={handleCopy}
           onContextMenu={handleContextMenu}
         >
@@ -144,7 +144,7 @@ export const LogList = ({
                 onActiveFileChange(log.sourceFile);
               }
             }}
-            className="h-[calc(100vh-140px)] scrollbar-container "
+            className="h-full scrollbar-container"
             itemContent={(index, log) => {
               // Highlight specific logs in merged view
               // chrome_user_log, chrome_system_log and their PREVIOUS variants

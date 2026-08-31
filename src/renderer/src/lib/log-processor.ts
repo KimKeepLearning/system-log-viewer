@@ -1,4 +1,4 @@
-import { LogFileContext, IUserLog } from "./typings";
+import { LogFileContext, IUserLog, SectionStats } from "./typings";
 import { parseLogLine, extractSectionsRawAsync } from "./log-parser";
 import { deriveBootAnchor } from "./log-time";
 
@@ -6,7 +6,30 @@ export interface ProcessedLogData {
   parsedLogs: Record<string, IUserLog[]>;
   structure: Record<string, string[]>;
   updatedFiles: LogFileContext[];
+  sectionStats: Record<string, SectionStats>;
 }
+
+const summarize = (logs: IUserLog[]): SectionStats => {
+  const stats: SectionStats = {
+    lines: logs.length,
+    errors: 0,
+    warnings: 0,
+    firstTs: null,
+    lastTs: null
+  };
+
+  for (const log of logs) {
+    if (log.level === "ERROR") stats.errors++;
+    else if (log.level === "WARN") stats.warnings++;
+
+    if (log.tsKind === "wall" && typeof log.ts === "number") {
+      if (stats.firstTs === null || log.ts < stats.firstTs) stats.firstTs = log.ts;
+      if (stats.lastTs === null || log.ts > stats.lastTs) stats.lastTs = log.ts;
+    }
+  }
+
+  return stats;
+};
 
 const LINES_CHUNK_SIZE = 5000;
 
@@ -90,6 +113,7 @@ export async function processFilesAsync(
   const parsedLogs: Record<string, IUserLog[]> = {};
   const structure: Record<string, string[]> = {};
   const updatedFiles: LogFileContext[] = [];
+  const sectionStats: Record<string, SectionStats> = {};
 
   // Track seen file names to handle duplicates
   const seenNames = new Map<string, number>();
@@ -152,7 +176,10 @@ export async function processFilesAsync(
         sections.push(uniqueKey);
       }
 
+      // Stats are taken after anchoring so the kernel sections report the wall
+      // clock range the timeline will actually place them at.
       anchorMonotonicLogs(parsedLogs, sections, rawSections);
+      for (const key of sections) sectionStats[key] = summarize(parsedLogs[key]);
     } else if (file.content.trim().length > 0) {
       // Fallback: Line-by-line parsing
       onProgress(`Parsing ${displayName} content...`);
@@ -168,11 +195,12 @@ export async function processFilesAsync(
       if (logs.length > 0) {
         parsedLogs[uniqueKey] = logs;
         sections.push(uniqueKey);
+        sectionStats[uniqueKey] = summarize(logs);
       }
     }
 
     structure[displayName] = sections;
   }
 
-  return { parsedLogs, structure, updatedFiles };
+  return { parsedLogs, structure, updatedFiles, sectionStats };
 }

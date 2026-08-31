@@ -13,11 +13,16 @@ import {
 import { parseDeviceInfo } from "@renderer/lib/log-parser";
 import { useRef, useState, useEffect, useCallback, useMemo } from "react";
 import { VirtuosoHandle } from "react-virtuoso";
-import { Checkbox } from "@renderer/components/ui/checkbox";
+import { Clock } from "lucide-react";
+import { cn } from "@renderer/lib/utils";
 
 import { useLogProcessing } from "./hooks/use-log-processing";
 import { useLogSearch } from "./hooks/use-log-search";
+import { useLogFilter } from "./hooks/use-log-filter";
 import { FileSidebar } from "./components/file-sidebar";
+import { FilterBar } from "./components/filter-bar";
+import { TimelineStrip } from "./components/timeline-strip";
+import { SearchResultsPanel } from "./components/search-results-panel";
 import { LogList } from "./components/log-list";
 
 export const Route = createFileRoute("/dashboard/main")({
@@ -44,6 +49,7 @@ function RouteComponent() {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [pendingScrollKey, setPendingScrollKey] = useState<string | null>(null);
   const [isMergedView, setIsMergedView] = useState(false);
+  const [isResultsOpen, setIsResultsOpen] = useState(false);
 
   const [searchQuery] = useAtom(searchQueryAtom);
   const [isRegex] = useAtom(isRegexAtom);
@@ -74,15 +80,24 @@ function RouteComponent() {
   }, [logStructure, selectedFileName]);
 
   // Use Custom Hook for Log Processing
-  const { allLogs, fileIndices } = useLogProcessing(
-    selectedFileName,
-    isMergedView,
-    logStructure,
-    parsedLogs
-  );
+  const { allLogs } = useLogProcessing(selectedFileName, isMergedView, logStructure, parsedLogs);
+
+  const { logs: visibleLogs, processes, levelCounts } = useLogFilter(allLogs);
+
+  // Section offsets have to follow the filtered list, otherwise the sidebar
+  // jumps to whatever now sits at the unfiltered index.
+  const fileIndices = useMemo(() => {
+    const indices: Record<string, number> = {};
+    if (isMergedView) return indices;
+    for (let index = 0; index < visibleLogs.length; index++) {
+      const key = visibleLogs[index].sourceFile;
+      if (indices[key] === undefined) indices[key] = index;
+    }
+    return indices;
+  }, [visibleLogs, isMergedView]);
 
   // Use Custom Hook for Search
-  const matchIndices = useLogSearch(allLogs, searchQuery, isRegex);
+  const matchIndices = useLogSearch(visibleLogs, searchQuery, isRegex);
 
   // Handle pending scroll after view update
   useEffect(() => {
@@ -160,30 +175,43 @@ function RouteComponent() {
       />
 
       {/* Main Content */}
-      <div className="flex-1 overflow-hidden relative bg-background">
-        <div className="flex items-center gap-1 p-2 border-b bg-background z-10">
-          <Tag>Board: {deviceInfo.board || "Unknown"}</Tag>
-          <Tag>OS Version: {deviceInfo.version || "Unknown"}</Tag>
-          <Tag>ARC Status: {deviceInfo.arcStatus || "Unknown"}</Tag>
+      <div className="flex-1 overflow-hidden relative bg-background flex flex-col min-w-0">
+        <div className="flex items-center gap-1.5 px-2 py-1.5 border-b bg-muted/30 shrink-0">
+          <Tag>{deviceInfo.board || "Unknown board"}</Tag>
+          <Tag>{deviceInfo.version || "Unknown version"}</Tag>
+          <Tag>ARC {deviceInfo.arcStatus || "unknown"}</Tag>
 
-          <div className="h-4 w-px bg-border/50 mx-2" />
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="merged-view"
-              checked={isMergedView}
-              onCheckedChange={(c) => setIsMergedView(!!c)}
-            />
-            <label
-              htmlFor="merged-view"
-              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer text-muted-foreground select-none"
-            >
-              Merge with timestamp
-            </label>
-          </div>
+          <div className="h-4 w-px bg-border mx-1" />
+
+          <button
+            type="button"
+            onClick={() => setIsMergedView(!isMergedView)}
+            className={cn(
+              "h-6 px-2 rounded-md text-xs font-medium inline-flex items-center gap-1.5 transition-colors border",
+              isMergedView
+                ? "border-primary/60 bg-primary/10 text-primary"
+                : "border-transparent bg-muted/40 text-muted-foreground hover:bg-muted"
+            )}
+            title="Interleave every section on one timeline"
+          >
+            <Clock className="size-3" />
+            Timeline
+          </button>
+        </div>
+
+        <TimelineStrip logs={allLogs} />
+
+        <div className="px-2 py-1.5 border-b bg-background shrink-0">
+          <FilterBar
+            levelCounts={levelCounts}
+            processes={processes}
+            visibleCount={visibleLogs.length}
+            totalCount={allLogs.length}
+          />
         </div>
 
         <LogList
-          logs={allLogs}
+          logs={visibleLogs}
           fileIndices={fileIndices}
           activeFile={activeFile}
           onActiveFileChange={setActiveFile}
@@ -194,6 +222,17 @@ function RouteComponent() {
           isRegex={isRegex}
           virtuosoRef={virtuosoRef}
           highlightedIndex={activeMatchLogIndex}
+        />
+
+        <SearchResultsPanel
+          logs={visibleLogs}
+          matchIndices={matchIndices}
+          activeMatchIndex={activeMatchLogIndex}
+          isOpen={isResultsOpen}
+          onToggle={() => setIsResultsOpen(!isResultsOpen)}
+          onJumpTo={(index) =>
+            virtuosoRef.current?.scrollToIndex({ index, align: "center", behavior: "auto" })
+          }
         />
       </div>
     </div>

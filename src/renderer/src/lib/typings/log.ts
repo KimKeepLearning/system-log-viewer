@@ -8,6 +8,15 @@ export interface LogFileContext {
   imageDataUrl?: string;
 }
 
+/** Counted once while parsing so the sidebar never has to walk the logs. */
+export interface SectionStats {
+  lines: number;
+  errors: number;
+  warnings: number;
+  firstTs: number | null;
+  lastTs: number | null;
+}
+
 export interface IUserLog {
   /** The timestamp exactly as it appeared, for display. */
   timestamp?: string;
