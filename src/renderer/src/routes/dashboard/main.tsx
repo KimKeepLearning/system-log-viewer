@@ -18,6 +18,7 @@ import { Clock } from "lucide-react";
 import { cn } from "@renderer/lib/utils";
 
 import { SearchBar } from "./components/search-bar";
+import { CommandPalette } from "./components/command-palette";
 import { useLogProcessing } from "./hooks/use-log-processing";
 import { useLogSearch } from "./hooks/use-log-search";
 import { useLogFilter } from "./hooks/use-log-filter";
@@ -38,6 +39,7 @@ function RouteComponent() {
   const logFiles = useAtomValue(logFilesAtom);
 
   const virtuosoRef = useRef<VirtuosoHandle>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
   const [activeFile, setActiveFile] = useState<string | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
@@ -190,8 +192,16 @@ function RouteComponent() {
             processes={processes}
             sections={sectionNames}
             levels={levelNames}
+            inputRef={searchInputRef}
           />
         </div>
+
+        <CommandPalette
+          sectionKeys={logStructure[selectedFileName ?? ""] ?? []}
+          onGoToSection={scrollToSection}
+          onFocusSearch={() => searchInputRef.current?.focus()}
+          onToggleMerge={() => setIsMergedView((merged) => !merged)}
+        />
 
         <TimelineStrip logs={allLogs} />
 

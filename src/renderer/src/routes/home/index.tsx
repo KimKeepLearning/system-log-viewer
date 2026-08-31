@@ -2,12 +2,14 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Providers } from "@renderer/components/providers";
 import { FileDropZone } from "@renderer/components/file-drop-zone";
 import { setProcessedLogsAtom } from "@renderer/lib/atom";
-import { readFiles } from "@renderer/lib/file-loader";
+import { readFiles, readFilesByPath } from "@renderer/lib/file-loader";
+import { forgetFile, recentFiles, type RecentFile } from "@renderer/lib/recent-files";
 import { processFilesAsync } from "@renderer/lib/log-processor";
 import { SSHConnectDialog } from "@renderer/components/ssh-connect-dialog";
 import { LogFileContext } from "@renderer/lib/typings";
 import { useSetAtom } from "jotai";
 import { useState } from "react";
+import { X } from "lucide-react";
 
 export const Route = createFileRoute("/home/")({
   component: RouteComponent
@@ -18,6 +20,7 @@ function RouteComponent() {
   const [error, setError] = useState<string>();
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
+  const [recent, setRecent] = useState<RecentFile[]>(() => recentFiles());
   const navigate = useNavigate();
 
   const processLogContexts = async (processedFiles: LogFileContext[]) => {
@@ -63,6 +66,23 @@ function RouteComponent() {
     }
   };
 
+  const handleReopen = async (path: string) => {
+    setLoading(true);
+    setError(undefined);
+    setStatus("Reading files...");
+    try {
+      await processLogContexts(await readFilesByPath([path]));
+    } catch (err) {
+      // The archive may have been moved or deleted since it was last opened.
+      forgetFile(path);
+      setRecent(recentFiles());
+      setError(`Could not reopen: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setLoading(false);
+      setStatus("");
+    }
+  };
+
   const handleFileSelect = async (files: File[]) => {
     if (!files || files.length === 0) return;
     setLoading(true);
@@ -102,6 +122,38 @@ function RouteComponent() {
           <div className="flex justify-center">
             <SSHConnectDialog onConnect={handleSSHConnect} onError={(msg) => setError(msg)} />
           </div>
+
+          {recent.length > 0 && !loading && (
+            <div className="flex flex-col gap-1">
+              <div className="text-xs font-medium text-muted-foreground">Recent</div>
+              {recent.map((entry) => (
+                <div
+                  key={entry.path}
+                  className="group flex items-center gap-2 rounded px-2 py-1 hover:bg-muted transition-colors"
+                >
+                  <button
+                    type="button"
+                    className="flex-1 min-w-0 text-left text-sm truncate"
+                    title={entry.path}
+                    onClick={() => handleReopen(entry.path)}
+                  >
+                    {entry.name}
+                  </button>
+                  <button
+                    type="button"
+                    className="text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                    title="Forget this file"
+                    onClick={() => {
+                      forgetFile(entry.path);
+                      setRecent(recentFiles());
+                    }}
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
 
           {loading && (
             <div className="text-center text-muted-foreground animate-pulse">

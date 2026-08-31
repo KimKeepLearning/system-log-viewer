@@ -87,6 +87,12 @@ export const sectionFilterAtom = atom<Set<string>>(new Set<string>());
 /** Inclusive epoch-microsecond window, set by dragging across the timeline. */
 export const timeRangeAtom = atom<{ from: number; to: number } | null>(null);
 
+/**
+ * When the selected line happened, so the timeline can point at it. Lifted out
+ * of the list because the strip is its sibling, not its child.
+ */
+export const selectedTimeAtom = atom<number | null>(null);
+
 export const sectionStatsAtom = atom<Record<string, SectionStats>>({});
 
 export const hasActiveFiltersAtom = atom(

@@ -1,8 +1,8 @@
 import { useMemo, useRef, useState } from "react";
-import { useAtom } from "jotai";
+import { useAtom, useAtomValue } from "jotai";
 import { X } from "lucide-react";
 import { cn } from "@renderer/lib/utils";
-import { timeRangeAtom } from "@renderer/lib/atom";
+import { selectedTimeAtom, timeRangeAtom } from "@renderer/lib/atom";
 import { ExtendedLog } from "../types";
 
 const BUCKET_COUNT = 160;
@@ -30,6 +30,7 @@ const formatSpan = (micros: number): string => {
  */
 export const TimelineStrip = ({ logs }: { logs: ExtendedLog[] }) => {
   const [timeRange, setTimeRange] = useAtom(timeRangeAtom);
+  const selectedTime = useAtomValue(selectedTimeAtom);
   const trackRef = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<{ from: number; to: number } | null>(null);
   const [hover, setHover] = useState<number | null>(null);
@@ -138,6 +139,16 @@ export const TimelineStrip = ({ logs }: { logs: ExtendedLog[] }) => {
               className="absolute inset-y-0 bg-primary/15 border-x border-primary/70 pointer-events-none"
               style={{ left: `${selectionLeft}%`, width: `${selectionWidth}%` }}
             />
+          )}
+
+          {/* Where the selected line sits in the session. */}
+          {selectedTime !== null && selectedTime >= model.min && selectedTime <= model.max && (
+            <div
+              className="absolute -inset-y-0.5 w-px bg-sky-500 pointer-events-none"
+              style={{ left: `${ratioOf(selectedTime)}%` }}
+            >
+              <div className="absolute -top-0.5 -left-0.75 size-1.5 rounded-full bg-sky-500 ring-2 ring-background" />
+            </div>
           )}
         </div>
 

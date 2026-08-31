@@ -21,6 +21,7 @@ interface SearchBarProps {
   processes: { name: string; count: number }[];
   sections: string[];
   levels: string[];
+  inputRef?: React.RefObject<HTMLInputElement | null>;
 }
 
 const SYNTAX_HELP: [string, string][] = [
@@ -40,11 +41,19 @@ const activeToken = (value: string): { start: number; text: string } => {
   return { start, text: value.slice(start) };
 };
 
-export const SearchBar = ({ parsed, matchCount, processes, sections, levels }: SearchBarProps) => {
+export const SearchBar = ({
+  parsed,
+  matchCount,
+  processes,
+  sections,
+  levels,
+  inputRef: externalRef
+}: SearchBarProps) => {
   const [query, setQuery] = useAtom(searchQueryAtom);
   const [currentMatch, setCurrentMatch] = useAtom(currentMatchIndexAtom);
   const searchMode = useAtomValue(searchModeAtom);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const localRef = useRef<HTMLInputElement>(null);
+  const inputRef = externalRef ?? localRef;
   const [isFocused, setIsFocused] = useState(false);
   const [highlighted, setHighlighted] = useState(0);
 

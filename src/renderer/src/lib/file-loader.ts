@@ -1,4 +1,5 @@
 import { LogFileContext } from "./typings/log";
+import { rememberFiles } from "./recent-files";
 
 const getPath = (file: File): string => {
   try {
@@ -12,19 +13,11 @@ const getPath = (file: File): string => {
   return (file as File & { path: string }).path;
 };
 
-export async function readFiles(files: File[]): Promise<LogFileContext[]> {
+export async function readFilesByPath(paths: string[]): Promise<LogFileContext[]> {
   const processedFiles: LogFileContext[] = [];
   const failures: Error[] = [];
 
-  for (const file of files) {
-    const path = getPath(file);
-
-    if (!path) {
-      console.error(`Could not determine path for file ${file.name}`);
-      failures.push(new Error(`Could not determine path for ${file.name}`));
-      continue;
-    }
-
+  for (const path of paths) {
     try {
       console.log(`[FileLoader] Reading ${path}`);
       // One dropped file can yield many: an archive contributes every log it
@@ -52,4 +45,24 @@ export async function readFiles(files: File[]): Promise<LogFileContext[]> {
   }
 
   return processedFiles;
+}
+
+export async function readFiles(files: File[]): Promise<LogFileContext[]> {
+  const paths: string[] = [];
+
+  for (const file of files) {
+    const path = getPath(file);
+    if (!path) {
+      console.error(`Could not determine path for file ${file.name}`);
+      continue;
+    }
+    paths.push(path);
+  }
+
+  if (paths.length === 0 && files.length > 0) {
+    throw new Error(`Could not determine a path for ${files[0].name}`);
+  }
+
+  rememberFiles(paths.map((path) => ({ path, name: path.split(/[\\/]/).pop() ?? path })));
+  return readFilesByPath(paths);
 }

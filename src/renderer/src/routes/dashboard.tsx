@@ -4,6 +4,7 @@ import { Button } from "@vibeus/ui";
 import { Toaster } from "@renderer/components/ui/sonner";
 import { ScreenshotViewer } from "@renderer/components/screenshot-viewer";
 import { LogFieldsDialog } from "@renderer/components/log-fields-dialog";
+import { BookmarksDialog } from "@renderer/components/bookmarks-dialog";
 import { useSelectFile } from "@renderer/hooks/use-select-file";
 import { useEasterEgg } from "@renderer/hooks/use-easter-egg";
 import { Loader2 } from "lucide-react";
@@ -31,6 +32,7 @@ function RouteComponent() {
 
         <div className="flex-1" />
 
+        <BookmarksDialog />
         <LogFieldsDialog />
         <ScreenshotViewer />
 
