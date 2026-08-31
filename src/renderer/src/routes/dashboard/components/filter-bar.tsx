@@ -73,7 +73,7 @@ export const FilterBar = ({ levelCounts, processes, visibleCount, totalCount }: 
     .slice(0, 200);
 
   return (
-    <div className="flex items-center gap-1.5 flex-wrap">
+    <div className="flex flex-1 min-w-0 items-center gap-1.5 flex-wrap">
       {LEVELS.map((level) => {
         const count = levelCounts[level.name] ?? 0;
         const isOn = levels.has(level.name);

@@ -13,6 +13,7 @@ interface FileSidebarProps {
   logStructure: Record<string, string[]>;
   selectedFileName: string | null;
   activeFile: string | null;
+  deviceInfo: { board?: string; version?: string; arcStatus?: string };
   onSelectFile: (fileName: string) => void;
   onScrollToSection: (key: string) => void;
 }
@@ -102,6 +103,7 @@ export const FileSidebar = ({
   logStructure,
   selectedFileName,
   activeFile,
+  deviceInfo,
   onSelectFile,
   onScrollToSection
 }: FileSidebarProps) => {
@@ -148,6 +150,17 @@ export const FileSidebar = ({
 
   return (
     <div className="w-72 border-r bg-muted/20 shrink-0 flex flex-col min-h-0">
+      <div className="px-2.5 py-2 border-b flex flex-col gap-0.5">
+        <div className="text-sm font-semibold truncate" title={deviceInfo.board}>
+          {deviceInfo.board && deviceInfo.board !== "unknown" ? deviceInfo.board : "Unknown board"}
+        </div>
+        <div className="text-[10px] text-muted-foreground flex items-center gap-1.5 tabular-nums">
+          <span>{deviceInfo.version ?? "unknown"}</span>
+          <span className="opacity-40">·</span>
+          <span>ARC {deviceInfo.arcStatus ?? "unknown"}</span>
+        </div>
+      </div>
+
       {files.length > 1 && (
         <div className="p-2 border-b flex flex-col gap-0.5">
           {files.map((fileName) => (

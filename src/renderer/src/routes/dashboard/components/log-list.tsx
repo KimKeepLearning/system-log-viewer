@@ -31,8 +31,7 @@ interface LogListProps {
   isMergedView: boolean;
   expandedIds: Set<string>;
   onToggleExpand: (id: string) => void;
-  searchQuery: string;
-  isRegex: boolean;
+  patterns: RegExp[];
   virtuosoRef: React.RefObject<VirtuosoHandle | null>;
   highlightedIndex?: number;
 }
@@ -45,8 +44,7 @@ export const LogList = ({
   isMergedView,
   expandedIds,
   onToggleExpand,
-  searchQuery,
-  isRegex,
+  patterns,
   virtuosoRef,
   highlightedIndex
 }: LogListProps) => {
@@ -219,7 +217,7 @@ export const LogList = ({
                           highlightedIndex === index && "bg-yellow-100"
                         )}
                       >
-                        <LogRow log={log} query={searchQuery} isRegex={isRegex}>
+                        <LogRow log={log} patterns={patterns}>
                           <CollapsibleTrigger asChild>
                             <Badge
                               variant="secondary"
@@ -236,12 +234,7 @@ export const LogList = ({
                                 <div key={i} className="relative">
                                   {/* Connecting line visual */}
                                   <div className="border-b border-border/20 last:border-0">
-                                    <LogRow
-                                      log={dup}
-                                      query={searchQuery}
-                                      isRegex={isRegex}
-                                      isMain={false}
-                                    />
+                                    <LogRow log={dup} patterns={patterns} isMain={false} />
                                   </div>
                                 </div>
                               ))}
@@ -265,7 +258,7 @@ export const LogList = ({
                           highlightedIndex === index && "bg-yellow-100"
                         )}
                       >
-                        <LogRow log={log} query={searchQuery} isRegex={isRegex} />
+                        <LogRow log={log} patterns={patterns} />
                       </div>
                     </div>
                   )}

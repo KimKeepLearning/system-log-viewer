@@ -5,17 +5,19 @@ import {
   logKeysAtom,
   parsedLogsMapAtom,
   searchQueryAtom,
-  isRegexAtom,
   searchMatchesCountAtom,
   currentMatchIndexAtom,
   logFilesAtom
 } from "@renderer/lib/atom";
 import { parseDeviceInfo } from "@renderer/lib/log-parser";
+import { highlightPatterns, parseQuery } from "@renderer/lib/log-query";
+import { sectionNameOf } from "@renderer/lib/log-domains";
 import { useRef, useState, useEffect, useCallback, useMemo } from "react";
 import { VirtuosoHandle } from "react-virtuoso";
 import { Clock } from "lucide-react";
 import { cn } from "@renderer/lib/utils";
 
+import { SearchBar } from "./components/search-bar";
 import { useLogProcessing } from "./hooks/use-log-processing";
 import { useLogSearch } from "./hooks/use-log-search";
 import { useLogFilter } from "./hooks/use-log-filter";
@@ -28,14 +30,6 @@ import { LogList } from "./components/log-list";
 export const Route = createFileRoute("/dashboard/main")({
   component: RouteComponent
 });
-
-const Tag = ({ children }: { children: React.ReactNode }) => {
-  return (
-    <div className="text-[10px] font-medium bg-muted text-muted-foreground rounded-sm border border-border px-1.5 py-0.5">
-      {children}
-    </div>
-  );
-};
 
 function RouteComponent() {
   const logStructure = useAtomValue(logStructureAtom);
@@ -52,7 +46,8 @@ function RouteComponent() {
   const [isResultsOpen, setIsResultsOpen] = useState(false);
 
   const [searchQuery] = useAtom(searchQueryAtom);
-  const [isRegex] = useAtom(isRegexAtom);
+  const parsedQuery = useMemo(() => parseQuery(searchQuery), [searchQuery]);
+  const patterns = useMemo(() => highlightPatterns(parsedQuery), [parsedQuery]);
   const setMatchesCount = useSetAtom(searchMatchesCountAtom);
   const [currentMatchIndex] = useAtom(currentMatchIndexAtom);
   const deviceInfo = useMemo(() => {
@@ -82,7 +77,17 @@ function RouteComponent() {
   // Use Custom Hook for Log Processing
   const { allLogs } = useLogProcessing(selectedFileName, isMergedView, logStructure, parsedLogs);
 
-  const { logs: visibleLogs, processes, levelCounts } = useLogFilter(allLogs);
+  const { logs: visibleLogs, processes, levelCounts } = useLogFilter(allLogs, parsedQuery);
+
+  // Section names for the search bar's section: completion.
+  const sectionNames = useMemo(
+    () => (logStructure[selectedFileName ?? ""] ?? []).map(sectionNameOf),
+    [logStructure, selectedFileName]
+  );
+  const levelNames = useMemo(
+    () => Object.keys(levelCounts).filter((name) => name !== "NONE"),
+    [levelCounts]
+  );
 
   // Section offsets have to follow the filtered list, otherwise the sidebar
   // jumps to whatever now sits at the unfiltered index.
@@ -97,7 +102,7 @@ function RouteComponent() {
   }, [visibleLogs, isMergedView]);
 
   // Use Custom Hook for Search
-  const matchIndices = useLogSearch(visibleLogs, searchQuery, isRegex);
+  const matchIndices = useLogSearch(visibleLogs, parsedQuery);
 
   // Handle pending scroll after view update
   useEffect(() => {
@@ -170,24 +175,32 @@ function RouteComponent() {
         logStructure={logStructure}
         selectedFileName={selectedFileName}
         activeFile={activeFile}
+        deviceInfo={deviceInfo}
         onSelectFile={setSelectedFileName}
         onScrollToSection={scrollToSection}
       />
 
       {/* Main Content */}
       <div className="flex-1 overflow-hidden relative bg-background flex flex-col min-w-0">
-        <div className="flex items-center gap-1.5 px-2 py-1.5 border-b bg-muted/30 shrink-0">
-          <Tag>{deviceInfo.board || "Unknown board"}</Tag>
-          <Tag>{deviceInfo.version || "Unknown version"}</Tag>
-          <Tag>ARC {deviceInfo.arcStatus || "unknown"}</Tag>
+        {/* Search sits with the list it searches rather than up in the title bar. */}
+        <div className="px-2 py-1.5 border-b bg-background shrink-0">
+          <SearchBar
+            parsed={parsedQuery}
+            matchCount={matchIndices.length}
+            processes={processes}
+            sections={sectionNames}
+            levels={levelNames}
+          />
+        </div>
 
-          <div className="h-4 w-px bg-border mx-1" />
+        <TimelineStrip logs={allLogs} />
 
+        <div className="px-2 py-1.5 border-b bg-background shrink-0 flex items-center gap-1.5">
           <button
             type="button"
             onClick={() => setIsMergedView(!isMergedView)}
             className={cn(
-              "h-6 px-2 rounded-md text-xs font-medium inline-flex items-center gap-1.5 transition-colors border",
+              "h-6 px-2 rounded-md text-xs font-medium inline-flex items-center gap-1.5 transition-colors border shrink-0",
               isMergedView
                 ? "border-primary/60 bg-primary/10 text-primary"
                 : "border-transparent bg-muted/40 text-muted-foreground hover:bg-muted"
@@ -195,13 +208,11 @@ function RouteComponent() {
             title="Interleave every section on one timeline"
           >
             <Clock className="size-3" />
-            Timeline
+            Merge
           </button>
-        </div>
 
-        <TimelineStrip logs={allLogs} />
+          <div className="h-4 w-px bg-border" />
 
-        <div className="px-2 py-1.5 border-b bg-background shrink-0">
           <FilterBar
             levelCounts={levelCounts}
             processes={processes}
@@ -218,8 +229,7 @@ function RouteComponent() {
           isMergedView={isMergedView}
           expandedIds={expandedIds}
           onToggleExpand={toggleExpand}
-          searchQuery={searchQuery}
-          isRegex={isRegex}
+          patterns={patterns}
           virtuosoRef={virtuosoRef}
           highlightedIndex={activeMatchLogIndex}
         />

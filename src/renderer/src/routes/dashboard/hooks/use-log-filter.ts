@@ -4,11 +4,10 @@ import {
   levelFilterAtom,
   processFilterAtom,
   sectionFilterAtom,
-  searchQueryAtom,
   searchModeAtom,
-  isRegexAtom,
   timeRangeAtom
 } from "@renderer/lib/atom";
+import { buildMatcher, ParsedQuery } from "@renderer/lib/log-query";
 import { ExtendedLog } from "../types";
 
 export interface FilterResult {
@@ -20,37 +19,16 @@ export interface FilterResult {
   levelCounts: Record<string, number>;
 }
 
-const matcherFor = (query: string, isRegex: boolean): ((log: ExtendedLog) => boolean) => {
-  if (isRegex) {
-    let regex: RegExp;
-    try {
-      regex = new RegExp(query, "i");
-    } catch {
-      // An unfinished pattern should not blank the view while it is being typed.
-      return () => true;
-    }
-    return (log) => regex.test(searchableText(log));
-  }
-
-  const needle = query.toLowerCase();
-  return (log) => searchableText(log).toLowerCase().includes(needle);
-};
-
-const searchableText = (log: ExtendedLog): string =>
-  `${log.timestamp ?? ""} ${log.level ?? ""} ${log.process ?? ""} ${log.source ?? ""} ${log.message}`;
-
 /**
  * Search alone only ever moved the cursor; the noise stayed on screen. This
  * narrows the list itself, which is the only way a few hundred thousand lines
  * become readable.
  */
-export const useLogFilter = (allLogs: ExtendedLog[]): FilterResult => {
+export const useLogFilter = (allLogs: ExtendedLog[], parsed: ParsedQuery): FilterResult => {
   const levels = useAtomValue(levelFilterAtom);
   const processes = useAtomValue(processFilterAtom);
   const sections = useAtomValue(sectionFilterAtom);
-  const query = useAtomValue(searchQueryAtom);
   const mode = useAtomValue(searchModeAtom);
-  const isRegex = useAtomValue(isRegexAtom);
   const timeRange = useAtomValue(timeRangeAtom);
 
   // Derived from the unfiltered set so the choices on offer do not disappear as
@@ -74,7 +52,7 @@ export const useLogFilter = (allLogs: ExtendedLog[]): FilterResult => {
   }, [allLogs]);
 
   const logs = useMemo(() => {
-    const filterBySearch = mode === "filter" && query.length > 0;
+    const filterBySearch = mode === "filter" && !parsed.isEmpty;
     if (
       levels.size === 0 &&
       processes.size === 0 &&
@@ -85,7 +63,7 @@ export const useLogFilter = (allLogs: ExtendedLog[]): FilterResult => {
       return allLogs;
     }
 
-    const matches = filterBySearch ? matcherFor(query, isRegex) : null;
+    const matches = filterBySearch ? buildMatcher(parsed) : null;
 
     return allLogs.filter((log) => {
       if (levels.size > 0 && !levels.has(log.level as never)) return false;
@@ -101,7 +79,7 @@ export const useLogFilter = (allLogs: ExtendedLog[]): FilterResult => {
       if (matches && !matches(log)) return false;
       return true;
     });
-  }, [allLogs, levels, processes, sections, timeRange, query, mode, isRegex]);
+  }, [allLogs, levels, processes, sections, timeRange, parsed, mode]);
 
   return {
     logs,

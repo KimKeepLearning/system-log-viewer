@@ -62,7 +62,6 @@ export const loadLogFilesAtom = atom(null, (_get, set, files: LogFileContext[]) 
 });
 
 export const searchQueryAtom = atom<string>("");
-export const isRegexAtom = atom<boolean>(false);
 export const searchMatchesCountAtom = atom<number>(0);
 export const currentMatchIndexAtom = atom<number>(0);
 export const activeTabAtom = atom<string>("");
