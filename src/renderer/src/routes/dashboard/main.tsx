@@ -11,6 +11,7 @@ import {
 } from "@renderer/lib/atom";
 import { parseDeviceInfo } from "@renderer/lib/log-parser";
 import { highlightPatterns, parseQuery } from "@renderer/lib/log-query";
+import { looksLikeHistograms } from "@renderer/lib/log-histograms";
 import { sectionNameOf } from "@renderer/lib/log-domains";
 import { detectBootSessions, lifecycleEvents, timelineEvents } from "@renderer/lib/log-analysis";
 import { runRules } from "@renderer/lib/log-rules";
@@ -22,6 +23,7 @@ import { cn } from "@renderer/lib/utils";
 import { SearchBar } from "./components/search-bar";
 import { CommandPalette } from "./components/command-palette";
 import { OverviewDialog } from "./components/overview-dialog";
+import { MetricsView } from "./components/metrics-view";
 import { useLogProcessing } from "./hooks/use-log-processing";
 import { useLogSearch } from "./hooks/use-log-search";
 import { useLogFilter } from "./hooks/use-log-filter";
@@ -55,6 +57,14 @@ function RouteComponent() {
   const patterns = useMemo(() => highlightPatterns(parsedQuery), [parsedQuery]);
   const setMatchesCount = useSetAtom(searchMatchesCountAtom);
   const [currentMatchIndex] = useAtom(currentMatchIndexAtom);
+  // histograms.txt is a table of distributions, not a log; rendering it in the
+  // log list produced one unreadable row of JSON.
+  const metricsContent = useMemo(() => {
+    const file = logFiles.find((entry) => entry.name === selectedFileName);
+    if (!file || file.imageDataUrl) return null;
+    return looksLikeHistograms(file.content) ? file.content : null;
+  }, [logFiles, selectedFileName]);
+
   // The device is a property of the archive, not of whichever file is open:
   // reading it from the selection made the header say "Unknown board" as soon
   // as you clicked histograms.txt, which carries no device fields.
@@ -192,87 +202,93 @@ function RouteComponent() {
 
       {/* Main Content */}
       <div className="flex-1 overflow-hidden relative bg-background flex flex-col min-w-0">
-        {/* Search sits with the list it searches rather than up in the title bar. */}
-        <div className="px-2 py-1.5 border-b bg-background shrink-0">
-          <SearchBar
-            parsed={parsedQuery}
-            matchCount={matchIndices.length}
-            processes={processes}
-            sections={sectionNames}
-            levels={levelNames}
-            inputRef={searchInputRef}
-          />
-        </div>
+        {metricsContent ? (
+          <MetricsView content={metricsContent} />
+        ) : (
+          <>
+            {/* Search sits with the list it searches rather than up in the title bar. */}
+            <div className="px-2 py-1.5 border-b bg-background shrink-0">
+              <SearchBar
+                parsed={parsedQuery}
+                matchCount={matchIndices.length}
+                processes={processes}
+                sections={sectionNames}
+                levels={levelNames}
+                inputRef={searchInputRef}
+              />
+            </div>
 
-        <CommandPalette
-          sectionKeys={logStructure[selectedFileName ?? ""] ?? []}
-          onGoToSection={scrollToSection}
-          onFocusSearch={() => searchInputRef.current?.focus()}
-          onToggleMerge={() => setIsMergedView((merged) => !merged)}
-        />
+            <CommandPalette
+              sectionKeys={logStructure[selectedFileName ?? ""] ?? []}
+              onGoToSection={scrollToSection}
+              onFocusSearch={() => searchInputRef.current?.focus()}
+              onToggleMerge={() => setIsMergedView((merged) => !merged)}
+            />
 
-        <TimelineStrip logs={allLogs} events={events} />
+            <TimelineStrip logs={allLogs} events={events} />
 
-        <div className="px-2 py-1.5 border-b bg-background shrink-0 flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => setIsMergedView(!isMergedView)}
-            className={cn(
-              "h-6 px-2 rounded-md text-xs font-medium inline-flex items-center gap-1.5 transition-colors border shrink-0",
-              isMergedView
-                ? "border-primary/60 bg-primary/10 text-primary"
-                : "border-transparent bg-muted/40 text-muted-foreground hover:bg-muted"
-            )}
-            title="Interleave every section on one timeline"
-          >
-            <Clock className="size-3" />
-            Merge
-          </button>
+            <div className="px-2 py-1.5 border-b bg-background shrink-0 flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setIsMergedView(!isMergedView)}
+                className={cn(
+                  "h-6 px-2 rounded-md text-xs font-medium inline-flex items-center gap-1.5 transition-colors border shrink-0",
+                  isMergedView
+                    ? "border-primary/60 bg-primary/10 text-primary"
+                    : "border-transparent bg-muted/40 text-muted-foreground hover:bg-muted"
+                )}
+                title="Interleave every section on one timeline"
+              >
+                <Clock className="size-3" />
+                Merge
+              </button>
 
-          <OverviewDialog
-            logs={allLogs}
-            fileName={selectedFileName}
-            onJumpToLog={(log) => {
-              const index = visibleLogs.indexOf(log);
-              if (index >= 0) {
-                virtuosoRef.current?.scrollToIndex({ index, align: "center" });
+              <OverviewDialog
+                logs={allLogs}
+                fileName={selectedFileName}
+                onJumpToLog={(log) => {
+                  const index = visibleLogs.indexOf(log);
+                  if (index >= 0) {
+                    virtuosoRef.current?.scrollToIndex({ index, align: "center" });
+                  }
+                }}
+              />
+
+              <div className="h-4 w-px bg-border" />
+
+              <FilterBar
+                levelCounts={levelCounts}
+                processes={processes}
+                visibleCount={visibleLogs.length}
+                totalCount={allLogs.length}
+              />
+            </div>
+
+            <LogList
+              logs={visibleLogs}
+              fileIndices={fileIndices}
+              activeFile={activeFile}
+              onActiveFileChange={setActiveFile}
+              isMergedView={isMergedView}
+              expandedIds={expandedIds}
+              onToggleExpand={toggleExpand}
+              patterns={patterns}
+              virtuosoRef={virtuosoRef}
+              highlightedIndex={activeMatchLogIndex}
+            />
+
+            <SearchResultsPanel
+              logs={visibleLogs}
+              matchIndices={matchIndices}
+              activeMatchIndex={activeMatchLogIndex}
+              isOpen={isResultsOpen}
+              onToggle={() => setIsResultsOpen(!isResultsOpen)}
+              onJumpTo={(index) =>
+                virtuosoRef.current?.scrollToIndex({ index, align: "center", behavior: "auto" })
               }
-            }}
-          />
-
-          <div className="h-4 w-px bg-border" />
-
-          <FilterBar
-            levelCounts={levelCounts}
-            processes={processes}
-            visibleCount={visibleLogs.length}
-            totalCount={allLogs.length}
-          />
-        </div>
-
-        <LogList
-          logs={visibleLogs}
-          fileIndices={fileIndices}
-          activeFile={activeFile}
-          onActiveFileChange={setActiveFile}
-          isMergedView={isMergedView}
-          expandedIds={expandedIds}
-          onToggleExpand={toggleExpand}
-          patterns={patterns}
-          virtuosoRef={virtuosoRef}
-          highlightedIndex={activeMatchLogIndex}
-        />
-
-        <SearchResultsPanel
-          logs={visibleLogs}
-          matchIndices={matchIndices}
-          activeMatchIndex={activeMatchLogIndex}
-          isOpen={isResultsOpen}
-          onToggle={() => setIsResultsOpen(!isResultsOpen)}
-          onJumpTo={(index) =>
-            virtuosoRef.current?.scrollToIndex({ index, align: "center", behavior: "auto" })
-          }
-        />
+            />
+          </>
+        )}
       </div>
     </div>
   );
