@@ -56,7 +56,10 @@ export const RULES: Rule[] = [
     title: "Filesystem error",
     severity: "critical",
     why: "The root filesystem reported corruption or was remounted read-only; data loss is possible.",
-    pattern: /EXT4-fs error|remount-ro|I\/O error|Buffer I\/O error|journal aborted/i
+    // A bare "I/O error" also appears in USB and camera DBus failures, which
+    // have nothing to do with the filesystem; the block-layer wording does not.
+    pattern:
+      /EXT4-fs error|remount-ro|Buffer I\/O error|blk_update_request: I\/O error|I\/O error, dev |journal aborted/i
   },
   {
     id: "process-crash",

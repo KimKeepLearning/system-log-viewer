@@ -140,6 +140,19 @@ export const TimelineStrip = ({
 
   const ratioOf = (micros: number) => ((micros - model.min) / model.span) * 100;
 
+  // Labels are dropped where they would collide with the previous one, so a
+  // burst of events stays readable as marks without a wall of overlapping text.
+  const LABEL_GAP_PERCENT = 9;
+  let lastLabelAt = -Infinity;
+  const placedEvents = events
+    .map((event) => ({ event, left: ratioOf(event.ts) }))
+    .filter(({ left }) => left >= 0 && left <= 100)
+    .map(({ event, left }) => {
+      const showLabel = left - lastLabelAt > LABEL_GAP_PERCENT;
+      if (showLabel) lastLabelAt = left;
+      return { event, left, showLabel, anchorRight: left > 82 };
+    });
+
   // Only the in-progress drag is drawn: once released, the window becomes the
   // strip's range, so an overlay would just cover the whole track.
   const selectionLeft = drag ? ratioOf(Math.min(drag.from, drag.to)) : 0;
@@ -220,27 +233,6 @@ export const TimelineStrip = ({
             />
           )}
 
-          {/* Boots and the first of each consequential finding. */}
-          {events.map((event) => {
-            const left = ratioOf(event.ts);
-            if (left < 0 || left > 100) return null;
-            return (
-              <div
-                key={`${event.ts}-${event.label}`}
-                className="absolute top-0 bottom-0 pointer-events-none"
-                style={{ left: `${left}%` }}
-                title={`${formatMoment(event.ts, model.multiDay)} — ${event.label}`}
-              >
-                <div
-                  className={cn(
-                    "absolute top-0 size-1.5 -left-0.75 rotate-45",
-                    EVENT_COLOR[event.severity]
-                  )}
-                />
-              </div>
-            );
-          })}
-
           {/* Where the selected line sits in the session. */}
           {selectedTime !== null && selectedTime >= model.min && selectedTime <= model.max && (
             <div
@@ -252,6 +244,45 @@ export const TimelineStrip = ({
           )}
         </div>
 
+        {/* Events get their own lane with their names written out, so the marks
+            do not need to be decoded from a key. */}
+        {placedEvents.length > 0 && (
+          <div className="relative h-3.5">
+            {placedEvents.map(({ event, left, showLabel, anchorRight }) => (
+              <div
+                key={`${event.ts}-${event.label}`}
+                className="absolute top-0 flex items-center gap-0.5"
+                style={
+                  anchorRight
+                    ? { right: `${100 - left}%`, flexDirection: "row-reverse" }
+                    : { left: `${left}%` }
+                }
+                title={`${formatMoment(event.ts, model.multiDay)} — ${event.label}`}
+              >
+                <span
+                  className={cn(
+                    "size-1.5 shrink-0",
+                    event.kind === "problem" ? "rotate-45" : "rounded-full",
+                    EVENT_COLOR[event.severity]
+                  )}
+                />
+                {showLabel && (
+                  <span
+                    className={cn(
+                      "text-[9px] leading-none whitespace-nowrap",
+                      event.kind === "problem"
+                        ? "text-foreground font-medium"
+                        : "text-muted-foreground"
+                    )}
+                  >
+                    {event.label}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
         <div className="flex items-center justify-between text-[10px] text-muted-foreground tabular-nums leading-tight">
           <span>{formatMoment(model.min, model.multiDay)}</span>
           <span className={cn(hover === null && "opacity-0")}>
@@ -261,7 +292,7 @@ export const TimelineStrip = ({
         </div>
       </div>
 
-      <div className="w-32 shrink-0 flex flex-col justify-center text-[10px] leading-tight">
+      <div className="w-36 shrink-0 flex flex-col justify-center text-[10px] leading-tight">
         <div className="text-foreground font-medium tabular-nums">
           {formatSpan(model.span)}
           {model.isZoomed && (
@@ -285,6 +316,19 @@ export const TimelineStrip = ({
           // On a single-day log the date appears nowhere else on screen.
           <div className="text-muted-foreground/60 tabular-nums">
             {model.multiDay ? "UTC · drag to zoom" : `${formatDate(model.min)} UTC`}
+          </div>
+        )}
+
+        {placedEvents.length > 0 && (
+          <div className="flex items-center gap-2 mt-0.5 text-muted-foreground/70">
+            <span className="inline-flex items-center gap-1">
+              <span className="size-1.5 rotate-45 bg-red-500" />
+              problem
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="size-1.5 rounded-full bg-sky-500" />
+              state
+            </span>
           </div>
         )}
       </div>

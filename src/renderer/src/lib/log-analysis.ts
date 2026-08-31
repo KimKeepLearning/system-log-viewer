@@ -123,22 +123,84 @@ export const detectBootSessions = (logs: AnalyzedLog[]): BootSession[] => {
 export interface TimelineEvent {
   ts: number;
   label: string;
+  /** "lifecycle" is what the machine was doing; "problem" is what went wrong. */
+  kind: "lifecycle" | "problem";
   severity: "critical" | "warning" | "info";
 }
 
-const MAX_EVENTS = 40;
+/**
+ * State changes rather than failures. They give the axis a story -- booted
+ * here, sat idle there, woke up, signed in -- which is usually what locates an
+ * incident faster than the failure itself.
+ */
+const LIFECYCLE_PATTERNS: { label: string; pattern: RegExp }[] = [
+  { label: "login prompt", pattern: /login-prompt-visible/i },
+  { label: "OOBE", pattern: /\boobe-(?:update|skip-postlogin|config)\b/i },
+  { label: "session start", pattern: /Starting user session|SessionStarted|Starting session for/i },
+  { label: "session end", pattern: /Stopping (?:all )?session|SessionStopped/i },
+  { label: "idle", pattern: /User activity stopped/i },
+  { label: "active", pattern: /User activity reported/i },
+  { label: "suspend", pattern: /^Suspending\b|Starting suspend|PM: suspend entry/i },
+  { label: "resume", pattern: /^Resumed\b|PM: suspend exit|Finishing suspend/i },
+  { label: "lid closed", pattern: /Lid closed/i },
+  { label: "lid opened", pattern: /Lid opened/i },
+  { label: "screen off", pattern: /Turning screen off/i },
+  // Anchored: a background service logging "shutting down" on a poll loop
+  // otherwise contributes a mark every nine seconds and crowds out everything
+  // else on the axis.
+  { label: "shutdown", pattern: /^(?:Shutting down|Restarting system)\b/i }
+];
+
+const MAX_EVENTS = 60;
+// Two of the same thing within this window are one moment, not two marks.
+const DEDUPE_US = 5_000_000;
+// No single label may dominate the axis, however chatty its source is.
+const MAX_PER_LABEL = 6;
+
+export const lifecycleEvents = (logs: AnalyzedLog[]): TimelineEvent[] => {
+  const events: TimelineEvent[] = [];
+  const lastSeen = new Map<string, number>();
+  const seenCount = new Map<string, number>();
+
+  for (const log of logs) {
+    if (typeof log.ts !== "number" || !log.message) continue;
+
+    for (const { label, pattern } of LIFECYCLE_PATTERNS) {
+      if (!pattern.test(log.message)) continue;
+
+      const previous = lastSeen.get(label);
+      if (previous !== undefined && log.ts - previous < DEDUPE_US) break;
+
+      const count = seenCount.get(label) ?? 0;
+      if (count >= MAX_PER_LABEL) break;
+
+      lastSeen.set(label, log.ts);
+      seenCount.set(label, count + 1);
+      events.push({ ts: log.ts, label, kind: "lifecycle", severity: "info" });
+      break;
+    }
+  }
+
+  return events;
+};
 
 /**
- * The handful of moments worth marking on the strip: when the machine booted,
- * and when a rule with real consequences first fired. Everything else would
- * turn the axis into noise.
+ * The moments worth marking: what the machine was doing, and when a rule with
+ * real consequences first fired. Everything else would turn the axis into noise.
  */
-export const timelineEvents = (sessions: BootSession[], findings: Finding[]): TimelineEvent[] => {
+export const timelineEvents = (
+  sessions: BootSession[],
+  findings: Finding[],
+  lifecycle: TimelineEvent[] = []
+): TimelineEvent[] => {
   const events: TimelineEvent[] = sessions.map((session, index) => ({
     ts: session.startTs,
     label: sessions.length > 1 ? `boot ${index + 1}` : "boot",
+    kind: "lifecycle" as const,
     severity: "info" as const
   }));
+
+  events.push(...lifecycle);
 
   for (const finding of findings) {
     if (finding.rule.severity === "info") continue;
@@ -146,11 +208,20 @@ export const timelineEvents = (sessions: BootSession[], findings: Finding[]): Ti
     events.push({
       ts: finding.firstTs,
       label: finding.rule.title,
+      kind: "problem",
       severity: finding.rule.severity
     });
   }
 
-  return events.sort((a, b) => a.ts - b.ts).slice(0, MAX_EVENTS);
+  // Trim by importance, not by time: a chatty lifecycle label must never push a
+  // failure off the axis. Only then sort back into chronological order.
+  const weight = (event: TimelineEvent) =>
+    event.kind === "problem" ? 0 : event.label.startsWith("boot") ? 1 : 2;
+
+  return [...events]
+    .sort((a, b) => weight(a) - weight(b))
+    .slice(0, MAX_EVENTS)
+    .sort((a, b) => a.ts - b.ts);
 };
 
 export interface LogOverview {

@@ -64,9 +64,11 @@ function OverviewBody({ logs, fileName, onJumpToLog }: OverviewDialogProps) {
       ? (overview.lastTs - overview.firstTs) / 1000
       : 0;
 
+  // The project's Tabs is a left rail, not a top strip; overriding it to a
+  // column was what pushed the panels past the dialog's edge.
   return (
-    <Tabs defaultValue="summary" className="min-h-0 flex flex-col">
-      <TabsList className="w-fit">
+    <Tabs defaultValue="summary" className="min-h-0 items-start">
+      <TabsList className="w-32">
         <TabsTrigger value="summary">Summary</TabsTrigger>
         <TabsTrigger value="diagnostics">
           Diagnostics
@@ -78,7 +80,7 @@ function OverviewBody({ logs, fileName, onJumpToLog }: OverviewDialogProps) {
         {boot && <TabsTrigger value="boot">Boot</TabsTrigger>}
       </TabsList>
 
-      <div className="overflow-y-auto max-h-[58vh] scrollbar-container mt-2 pr-1">
+      <div className="flex-1 min-w-0 overflow-y-auto max-h-[58vh] scrollbar-container pr-1">
         <TabsContent value="summary" className="flex flex-col gap-3 m-0">
           <div className="grid grid-cols-4 gap-2">
             <Stat label="Lines" value={overview.lines.toLocaleString()} />
@@ -150,25 +152,25 @@ function OverviewBody({ logs, fileName, onJumpToLog }: OverviewDialogProps) {
                   key={finding.rule.id}
                   type="button"
                   onClick={() => onJumpToLog(logs[finding.sampleIndices[0]])}
-                  className="text-left border rounded-md p-2 hover:bg-muted/60 transition-colors flex flex-col gap-1"
+                  className="text-left border rounded-md p-2 hover:bg-muted/60 transition-colors flex flex-col gap-1 min-w-0"
                 >
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
                     <span
                       className={cn(
-                        "inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium",
+                        "inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium shrink-0",
                         style.chip
                       )}
                     >
                       <style.Icon className="size-3" />
                       {finding.rule.severity}
                     </span>
-                    <span className="text-sm font-medium">{finding.rule.title}</span>
-                    <span className="text-xs text-muted-foreground tabular-nums ml-auto">
+                    <span className="text-sm font-medium truncate">{finding.rule.title}</span>
+                    <span className="text-xs text-muted-foreground tabular-nums ml-auto shrink-0 whitespace-nowrap">
                       {finding.count}× · first {clock(finding.firstTs).slice(11)}
                     </span>
                   </div>
                   <p className="text-xs text-muted-foreground">{finding.rule.why}</p>
-                  <p className="text-[11px] font-mono truncate opacity-70">
+                  <p className="text-[11px] font-mono truncate opacity-70 min-w-0">
                     {finding.sampleMessage}
                   </p>
                 </button>
@@ -187,7 +189,7 @@ function OverviewBody({ logs, fileName, onJumpToLog }: OverviewDialogProps) {
               key={cluster.template}
               type="button"
               onClick={() => onJumpToLog(logs[cluster.sampleIndex])}
-              className="text-left flex items-baseline gap-2 py-1 border-b border-border/40 hover:bg-muted/60 transition-colors"
+              className="text-left flex items-baseline gap-2 py-1 border-b border-border/40 hover:bg-muted/60 transition-colors min-w-0"
             >
               <span className="tabular-nums text-xs font-medium w-14 text-right shrink-0">
                 {cluster.count.toLocaleString()}×

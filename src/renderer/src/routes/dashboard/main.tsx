@@ -12,7 +12,7 @@ import {
 import { parseDeviceInfo } from "@renderer/lib/log-parser";
 import { highlightPatterns, parseQuery } from "@renderer/lib/log-query";
 import { sectionNameOf } from "@renderer/lib/log-domains";
-import { detectBootSessions, timelineEvents } from "@renderer/lib/log-analysis";
+import { detectBootSessions, lifecycleEvents, timelineEvents } from "@renderer/lib/log-analysis";
 import { runRules } from "@renderer/lib/log-rules";
 import { useRef, useState, useEffect, useCallback, useMemo } from "react";
 import { VirtuosoHandle } from "react-virtuoso";
@@ -93,7 +93,7 @@ function RouteComponent() {
   // the strip so the shape of the session is readable at a glance.
   const events = useMemo(() => {
     const sessions = detectBootSessions(allLogs);
-    return timelineEvents(sessions, runRules(allLogs));
+    return timelineEvents(sessions, runRules(allLogs), lifecycleEvents(allLogs));
   }, [allLogs]);
 
   const levelNames = useMemo(
