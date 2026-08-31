@@ -27,12 +27,16 @@ export const LogRow = ({
   >
     {!isMain && <div className="pt-0.5">&gt;</div>}
     {log.level && (
-      <span className={cn("shrink-0 w-12 font-bold text-center pt-0.5", getLevelColor(log.level))}>
+      <span
+        data-log-field="level"
+        className={cn("shrink-0 w-12 font-bold text-center pt-0.5", getLevelColor(log.level))}
+      >
         {log.level}
       </span>
     )}
     {log.process && (
       <span
+        data-log-field="process"
         className="text-muted-foreground shrink-0 w-32 truncate text-right mr-2 pt-0.5"
         title={log.process}
       >
@@ -40,18 +44,18 @@ export const LogRow = ({
       </span>
     )}
     {log.timestamp && (
-      <span className="text-muted-foreground shrink-0 min-w-45 pt-0.5">
+      <span data-log-field="timestamp" className="text-muted-foreground shrink-0 min-w-45 pt-0.5">
         <HighlightedText text={log.timestamp} query={query} isRegex={isRegex} />
       </span>
     )}
     <span className="flex-1 text-text-secondary min-w-0">
       <div className="whitespace-pre-wrap break-all">
         {log.source && (
-          <span className="text-muted-foreground mr-1 select-text">
+          <span data-log-field="source" className="text-muted-foreground mr-1 select-text">
             [<HighlightedText text={log.source} query={query} isRegex={isRegex} />]
           </span>
         )}
-        <span className="text-text-primary font-medium select-text">
+        <span data-log-field="message" className="text-text-primary font-medium select-text">
           <b>
             <HighlightedText text={log.message} query={query} isRegex={isRegex} />
           </b>

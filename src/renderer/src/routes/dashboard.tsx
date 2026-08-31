@@ -9,6 +9,7 @@ import { useAtom, useAtomValue } from "jotai";
 import LogoIcon from "@renderer/assets/file.svg?react";
 import { Button } from "@vibeus/ui";
 import { Input } from "@renderer/components/ui/input";
+import { Toaster } from "@renderer/components/ui/sonner";
 import { useSelectFile } from "@renderer/hooks/use-select-file";
 import { useEasterEgg } from "@renderer/hooks/use-easter-egg";
 import { Search, ArrowUp, ArrowDown, Regex, Loader2 } from "lucide-react";
@@ -137,6 +138,9 @@ function RouteComponent() {
         </div>
       </div>
       <Outlet />
+      {/* Providers (and with it the Toaster) is mounted inside /home only, so
+          the dashboard needs its own to give copy actions any feedback. */}
+      <Toaster position="bottom-right" />
     </div>
   );
 }
