@@ -1,5 +1,6 @@
 import { IUserLog } from "./typings";
 import { Board, DeviceInfo } from "./typings/device";
+import { monotonicSecondsToMicros, parseWallTimestamp } from "./log-time";
 
 export const parseDeviceInfo = (content: string): DeviceInfo => {
   const lines = content.split("\n");
@@ -42,19 +43,31 @@ export const extractLogSection = (content: string, key: string): string => {
   return match && match[1] ? match[1].trim() : "";
 };
 
-const parseStandardLogLine = (line: string): IUserLog | null => {
-  // Example: 2026-01-13T17:10:20.704235Z ERROR chrome[1073:1073]: [source] message
-  const logRegex = /^(\S+)\s+(\w+)\s+(.*?):\s+(.*)$/;
-  const logMatch = line.match(logRegex);
+type LogLevel = "INFO" | "WARN" | "ERROR" | "DEBUG" | "";
 
+const normalizeLevel = (rawLevel: string): LogLevel => {
+  if (rawLevel === "ERROR" || rawLevel === "CRIT" || rawLevel === "ALERT" || rawLevel === "EMERG") {
+    return "ERROR";
+  }
+  if (rawLevel === "WARN" || rawLevel === "WARNING") return "WARN";
+  if (rawLevel.startsWith("VERBOSE") || rawLevel === "DEBUG") return "DEBUG";
+  // EVENT and USER come from chrome's device_event_log, which has its own set.
+  return "INFO";
+};
+
+// "../../foo/bar/src/ui/views/thing.cc:12" -> "ui/views/thing.cc:12"
+const shortenSource = (source: string): string => source.replace(/(?:\.\.\/)+.*?\/src\//g, "");
+
+const parseStandardLogLine = (line: string): IUserLog | null => {
+  // Example: 2026-08-31T06:17:25.092359Z WARNING chrome[1016:1016]: [source] message
+  const logMatch = line.match(/^(\S+)\s+(\w+)\s+(.*?):\s+(.*)$/);
   if (!logMatch) return null;
 
-  let level = "INFO";
-  const rawLevel = logMatch[2];
-
-  if (rawLevel === "ERROR") level = "ERROR";
-  else if (rawLevel === "WARNING") level = "WARN";
-  else if (rawLevel.startsWith("VERBOSE")) level = "DEBUG";
+  // Without this check the pattern swallows any "word word ...: rest" line, so
+  // `ifconfig` or `ps` output would be handed a fabricated timestamp and then
+  // sorted into the merged timeline.
+  const ts = parseWallTimestamp(logMatch[1]);
+  if (ts === null) return null;
 
   let source = "";
   let message = logMatch[4];
@@ -62,16 +75,106 @@ const parseStandardLogLine = (line: string): IUserLog | null => {
   // Try to splice source from message if it matches [source] ...
   const sourceMatch = message.match(/^\[(.*?)\]\s+(.*)$/);
   if (sourceMatch) {
-    source = sourceMatch[1].replace(/(?:\.\.\/)+.*?\/src\//g, "");
+    source = shortenSource(sourceMatch[1]);
     message = sourceMatch[2];
   }
 
   return {
     timestamp: logMatch[1],
-    level: level as "INFO" | "WARN" | "ERROR" | "DEBUG",
+    ts,
+    tsKind: "wall",
+    level: normalizeLevel(logMatch[2]),
     process: logMatch[3],
     source,
     message
+  };
+};
+
+// Example: <6>[    0.606417] pcieport 0000:00:1c.0: AER: Corrected error received
+// The <N> prefix is a syslog priority; its low three bits are the severity,
+// which is the only level information a kernel line carries.
+const KERNEL_SEVERITY_LEVELS: LogLevel[] = [
+  "ERROR", // emerg
+  "ERROR", // alert
+  "ERROR", // crit
+  "ERROR", // err
+  "WARN", // warning
+  "INFO", // notice
+  "INFO", // info
+  "DEBUG" // debug
+];
+
+const parseKernelLogLine = (line: string): IUserLog | null => {
+  const match = line.match(/^(?:<(\d{1,3})>)?\[\s*(\d+\.\d+)\]\s?(.*)$/);
+  if (!match) return null;
+
+  const [, priority, seconds, message] = match;
+
+  return {
+    timestamp: `[${seconds}]`,
+    // Relative to boot; log-processor rewrites this to wall time once it can
+    // pair the two clocks via the syslog section.
+    ts: monotonicSecondsToMicros(seconds),
+    tsKind: "monotonic",
+    level: priority ? KERNEL_SEVERITY_LEVELS[Number(priority) & 7] : "",
+    process: "kernel",
+    source: "",
+    message
+  };
+};
+
+// Example, from device_event_log and network_event_log:
+// 2026-08-30T23:17:31.303993-07:00 USB: ERROR chrome[1016]: usb_service_linux.cc:255 message
+// The optional word before the level is chrome's own component tag (USB,
+// Bluetooth, Login, ...), and the file:line is written bare rather than in
+// brackets, so the generic parser folded it into the message.
+const parseDeviceEventLogLine = (line: string): IUserLog | null => {
+  const match = line.match(
+    /^(\S+)\s+(?:([A-Za-z]+):\s+)?(ERROR|WARNING|EVENT|USER|DEBUG)\s+(\S+?):\s+(\S+\.\w+:\d+)\s+(.*)$/
+  );
+  if (!match) return null;
+
+  const ts = parseWallTimestamp(match[1]);
+  if (ts === null) return null;
+
+  const [, , component, level, process, sourceFile, message] = match;
+
+  return {
+    timestamp: match[1],
+    ts,
+    tsKind: "wall",
+    level: normalizeLevel(level),
+    process,
+    // Kept alongside the file so the component is not lost; IUserLog has no
+    // field of its own for it and adding one costs a slot on every log line.
+    source: component ? `${component}: ${sourceFile}` : sourceFile,
+    message
+  };
+};
+
+// Example, from the vibe-service sections:
+// [2026-08-21 23:16:25.285] [INFO] [service::usbfs_client::handler:293] message
+//
+// The timestamp carries no zone. parseWallTimestamp reads it as UTC, which is
+// deterministic but shifts these entries by the writer's offset if the service
+// logged local time.
+const parseBracketedTimestampLogLine = (line: string): IUserLog | null => {
+  const match = line.match(
+    /^\[(\d{4}-\d{2}-\d{2}[ T][\d:.]+)\]\s+\[(\w+)\]\s+(?:\[([^\]]+)\]\s+)?(.*)$/
+  );
+  if (!match) return null;
+
+  const ts = parseWallTimestamp(match[1]);
+  if (ts === null) return null;
+
+  return {
+    timestamp: match[1],
+    ts,
+    tsKind: "wall",
+    level: normalizeLevel(match[2]),
+    process: "",
+    source: match[3] ? shortenSource(match[3]) : "",
+    message: match[4]
   };
 };
 
@@ -80,18 +183,39 @@ const parseBracketLevelLogLine = (line: string): IUserLog | null => {
   const bracketMatch = line.match(/^\[(ERROR|WARN|WARNING|INFO|DEBUG|VERBOSE)\]\s+(.*)$/);
   if (!bracketMatch) return null;
 
-  let level = "INFO";
-  const rawLevel = bracketMatch[1];
-  if (rawLevel === "ERROR") level = "ERROR";
-  else if (rawLevel === "WARN" || rawLevel === "WARNING") level = "WARN";
-  else if (rawLevel.startsWith("VERBOSE")) level = "DEBUG";
-
   return {
     timestamp: "",
-    level: level as "INFO" | "WARN" | "ERROR" | "DEBUG",
+    ts: null,
+    level: normalizeLevel(bracketMatch[1]),
     process: "",
     source: "",
     message: bracketMatch[2]
+  };
+};
+
+// Example: WARNING audit_log_filter: [../../debugd/src/helpers/x.cc:57] Failed.
+// Some sections (audit_log, update_engine.log) drop the timestamp but keep the
+// level, which used to be misread as a timestamp by parseStandardLogLine.
+const parseLevelPrefixedLogLine = (line: string): IUserLog | null => {
+  const match = line.match(/^(ERROR|WARNING|WARN|NOTICE|INFO|DEBUG|VERBOSE\d*)\s+(\S+?):\s+(.*)$/);
+  if (!match) return null;
+
+  let source = "";
+  let message = match[3];
+
+  const sourceMatch = message.match(/^\[(.*?)\]\s+(.*)$/);
+  if (sourceMatch) {
+    source = shortenSource(sourceMatch[1]);
+    message = sourceMatch[2];
+  }
+
+  return {
+    timestamp: "",
+    ts: null,
+    level: normalizeLevel(match[1]),
+    process: match[2],
+    source,
+    message
   };
 };
 
@@ -105,6 +229,8 @@ const parseCrasAtlogLine = (line: string): IUserLog | null => {
 
   return {
     timestamp: match[1],
+    ts: parseWallTimestamp(match[1]),
+    tsKind: "wall",
     level: "",
     process: match[2],
     source: "",
@@ -112,43 +238,45 @@ const parseCrasAtlogLine = (line: string): IUserLog | null => {
   };
 };
 
+// Kernel lines are tried first: "<6>[  0.6] pcieport 0000:00:1c.0: AER: ..."
+// also satisfies the looser standard pattern, which would misread the priority
+// prefix as a timestamp.
+// Order matters: the more specific patterns run before parseStandardLogLine,
+// which is loose enough to half-match several of them and lose fields.
+const STRATEGIES = [
+  parseKernelLogLine,
+  parseBracketedTimestampLogLine,
+  parseDeviceEventLogLine,
+  parseStandardLogLine,
+  parseCrasAtlogLine,
+  parseBracketLevelLogLine,
+  parseLevelPrefixedLogLine
+];
+
+const unstructured = (message: string): IUserLog => ({
+  timestamp: "",
+  ts: null,
+  level: "",
+  process: "",
+  source: "",
+  message
+});
+
 export const parseLogLine = (line: string): IUserLog => {
   // Optimization: Don't trim huge lines repeatedly or regex them
   if (line.length > 2000) {
-    return {
-      timestamp: "",
-      level: "",
-      process: "",
-      source: "",
-      message: line.trim()
-    };
+    return unstructured(line.trim());
   }
 
   line = line.trim();
-  if (!line) {
-    return { timestamp: "", level: "INFO", process: "", source: "", message: "" };
-  }
+  if (!line) return unstructured("");
 
-  // Optimization: Quick check before regex
-  // Standard log usually has a timestamp like 202*-*-* or T...Z
-  // And usually has : in it.
-
-  // Try strategies
-  const strategies = [parseStandardLogLine, parseCrasAtlogLine, parseBracketLevelLogLine];
-
-  for (const strategy of strategies) {
+  for (const strategy of STRATEGIES) {
     const result = strategy(line);
     if (result) return result;
   }
 
-  // Fallback
-  return {
-    timestamp: "",
-    level: "",
-    process: "",
-    source: "",
-    message: line
-  };
+  return unstructured(line);
 };
 
 export const parseLogSection = (content: string, key: string): IUserLog[] => {
@@ -186,6 +314,48 @@ export const parseAllLogSections = (content: string): Record<string, IUserLog[]>
   }
 
   return result;
+};
+
+export interface LogField {
+  key: string;
+  value: string;
+}
+
+// Keys are short labels like CHROMEOS_RELEASE_BOARD or "CHROME VERSION"; this
+// bound keeps a stray '=' deep inside a log line from being read as one.
+const MAX_FIELD_KEY_LENGTH = 60;
+
+/**
+ * Pulls the single-line `key=value` fields that sit between the `<multiline>`
+ * sections. A system_logs.txt carries around 170 of them — board, HWID, channel,
+ * firmware, enrollment, free disk space — and until now only three reached the
+ * UI.
+ */
+export const extractSingleLineFields = (content: string): LogField[] => {
+  const fields: LogField[] = [];
+  let insideSection = false;
+
+  for (const line of content.split("\n")) {
+    if (insideSection) {
+      if (/^-+\s*END\s*-+\s*$/.test(line)) insideSection = false;
+      continue;
+    }
+
+    if (line.includes("=<multiline>")) {
+      insideSection = true;
+      continue;
+    }
+
+    const separator = line.indexOf("=");
+    if (separator <= 0 || separator > MAX_FIELD_KEY_LENGTH) continue;
+
+    fields.push({
+      key: line.slice(0, separator).trim(),
+      value: line.slice(separator + 1).trim()
+    });
+  }
+
+  return fields;
 };
 
 export const extractSectionsRaw = (content: string): { key: string; rawContent: string }[] => {

@@ -1,5 +1,6 @@
 import { LogFileContext, IUserLog } from "./typings";
 import { parseLogLine, extractSectionsRawAsync } from "./log-parser";
+import { deriveBootAnchor } from "./log-time";
 
 export interface ProcessedLogData {
   parsedLogs: Record<string, IUserLog[]>;
@@ -55,6 +56,33 @@ async function parseContentByLines(
   return logs;
 }
 
+/**
+ * Kernel logs count seconds since boot while everything else records wall
+ * clock, so on their own they cannot be interleaved. The syslog section relays
+ * kernel messages with both clocks attached, which is enough to place monotonic
+ * zero on the wall-clock timeline and shift the kernel entries onto it.
+ */
+function anchorMonotonicLogs(
+  parsedLogs: Record<string, IUserLog[]>,
+  sectionKeys: string[],
+  rawSections: { key: string; rawContent: string }[]
+): void {
+  const syslog = rawSections.find((section) => section.key === "syslog");
+  if (!syslog) return;
+
+  const anchor = deriveBootAnchor(syslog.rawContent);
+  if (!anchor) return;
+
+  for (const key of sectionKeys) {
+    for (const log of parsedLogs[key] ?? []) {
+      if (log.tsKind === "monotonic" && log.ts !== null && log.ts !== undefined) {
+        log.ts += anchor.bootEpochUs;
+        log.tsKind = "wall";
+      }
+    }
+  }
+}
+
 export async function processFilesAsync(
   files: LogFileContext[],
   onProgress: (status: string) => void
@@ -78,6 +106,11 @@ export async function processFilesAsync(
     seenNames.set(file.name, count + 1);
 
     updatedFiles.push({ ...file, name: displayName });
+
+    // Images are kept for the screenshot viewer but have nothing to parse, and
+    // giving them a (always empty) entry in the structure would only clutter
+    // the log sidebar.
+    if (file.imageDataUrl) continue;
 
     onProgress(`Processing ${displayName} (${i + 1}/${files.length})...`);
     await sleep(20);
@@ -118,6 +151,8 @@ export async function processFilesAsync(
         parsedLogs[uniqueKey] = logs;
         sections.push(uniqueKey);
       }
+
+      anchorMonotonicLogs(parsedLogs, sections, rawSections);
     } else if (file.content.trim().length > 0) {
       // Fallback: Line-by-line parsing
       onProgress(`Parsing ${displayName} content...`);

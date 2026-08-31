@@ -15,6 +15,11 @@ export const baseDeviceInfoAtom = atom<DeviceInfo>((get) => {
   return parseDeviceInfo(files[0].content);
 });
 
+// Images pulled out of the loaded archives, e.g. the feedback screenshot.
+export const screenshotsAtom = atom((get) =>
+  get(logFilesAtom).filter((file) => Boolean(file.imageDataUrl))
+);
+
 // A map of all parsed logs, keyed by "FileName::SectionName"
 // Now a state atom, set by loadLogFilesAtom
 export const parsedLogsMapAtom = atom<Record<string, IUserLog[]>>({});

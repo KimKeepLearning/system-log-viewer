@@ -10,6 +10,8 @@ import LogoIcon from "@renderer/assets/file.svg?react";
 import { Button } from "@vibeus/ui";
 import { Input } from "@renderer/components/ui/input";
 import { Toaster } from "@renderer/components/ui/sonner";
+import { ScreenshotViewer } from "@renderer/components/screenshot-viewer";
+import { LogFieldsDialog } from "@renderer/components/log-fields-dialog";
 import { useSelectFile } from "@renderer/hooks/use-select-file";
 import { useEasterEgg } from "@renderer/hooks/use-easter-egg";
 import { Search, ArrowUp, ArrowDown, Regex, Loader2 } from "lucide-react";
@@ -117,7 +119,9 @@ function RouteComponent() {
           </div>
         </div>
 
-        <div className="flex items-center">
+        <div className="flex items-center gap-2">
+          <LogFieldsDialog />
+          <ScreenshotViewer />
           <Button
             variant="secondary"
             className="bg-fill-background-inverse text-text-on-interaction-inverse h-6 text-xs px-3"
