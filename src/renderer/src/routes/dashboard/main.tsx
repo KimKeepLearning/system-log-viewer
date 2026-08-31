@@ -9,7 +9,8 @@ import {
   currentMatchIndexAtom,
   logFilesAtom
 } from "@renderer/lib/atom";
-import { parseDeviceInfo } from "@renderer/lib/log-parser";
+import { extractLogSection, parseDeviceInfo } from "@renderer/lib/log-parser";
+import { hierarchyKindOf } from "@renderer/lib/ui-hierarchy";
 import { highlightPatterns, parseQuery } from "@renderer/lib/log-query";
 import { looksLikeHistograms } from "@renderer/lib/log-histograms";
 import { sectionNameOf } from "@renderer/lib/log-domains";
@@ -24,6 +25,7 @@ import { SearchBar } from "./components/search-bar";
 import { CommandPalette } from "./components/command-palette";
 import { OverviewDialog } from "./components/overview-dialog";
 import { MetricsView } from "./components/metrics-view";
+import { HierarchyView } from "./components/hierarchy-view";
 import { useLogProcessing } from "./hooks/use-log-processing";
 import { useLogSearch } from "./hooks/use-log-search";
 import { useLogFilter } from "./hooks/use-log-filter";
@@ -51,6 +53,7 @@ function RouteComponent() {
   const [pendingScrollKey, setPendingScrollKey] = useState<string | null>(null);
   const [isMergedView, setIsMergedView] = useState(false);
   const [isResultsOpen, setIsResultsOpen] = useState(false);
+  const [hierarchyKey, setHierarchyKey] = useState<string | null>(null);
 
   const [searchQuery] = useAtom(searchQueryAtom);
   const parsedQuery = useMemo(() => parseQuery(searchQuery), [searchQuery]);
@@ -64,6 +67,15 @@ function RouteComponent() {
     if (!file || file.imageDataUrl) return null;
     return looksLikeHistograms(file.content) ? file.content : null;
   }, [logFiles, selectedFileName]);
+
+  const hierarchy = useMemo(() => {
+    if (!hierarchyKey) return null;
+    const sectionName = sectionNameOf(hierarchyKey);
+    const kind = hierarchyKindOf(sectionName);
+    const file = logFiles.find((entry) => entry.name === hierarchyKey.split("::")[0]);
+    if (!kind || !file) return null;
+    return { kind, sectionName, content: extractLogSection(file.content, sectionName) };
+  }, [hierarchyKey, logFiles]);
 
   // The device is a property of the archive, not of whichever file is open:
   // reading it from the selection made the header say "Unknown board" as soon
@@ -137,6 +149,14 @@ function RouteComponent() {
 
   const scrollToSection = useCallback(
     (key: string) => {
+      // The three hierarchy sections are trees, not runs of lines; scrolling to
+      // them in the log list only ever showed their indentation.
+      if (hierarchyKindOf(sectionNameOf(key))) {
+        setHierarchyKey(key);
+        return;
+      }
+      setHierarchyKey(null);
+
       const fileName = key.split("::")[0];
       if (fileName !== selectedFileName) {
         setSelectedFileName(fileName);
@@ -204,6 +224,20 @@ function RouteComponent() {
       <div className="flex-1 overflow-hidden relative bg-background flex flex-col min-w-0">
         {metricsContent ? (
           <MetricsView content={metricsContent} />
+        ) : hierarchy ? (
+          <>
+            <div className="px-2 py-1.5 border-b flex items-center gap-2 shrink-0">
+              <span className="text-sm font-semibold truncate">{hierarchy.sectionName}</span>
+              <button
+                type="button"
+                onClick={() => setHierarchyKey(null)}
+                className="ml-auto h-6 px-2 rounded-md text-xs text-muted-foreground hover:bg-muted shrink-0"
+              >
+                Show as log
+              </button>
+            </div>
+            <HierarchyView content={hierarchy.content} kind={hierarchy.kind} />
+          </>
         ) : (
           <>
             {/* Search sits with the list it searches rather than up in the title bar. */}
