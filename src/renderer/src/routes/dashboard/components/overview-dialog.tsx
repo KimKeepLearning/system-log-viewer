@@ -64,10 +64,12 @@ function OverviewBody({ logs, fileName, onJumpToLog }: OverviewDialogProps) {
       ? (overview.lastTs - overview.firstTs) / 1000
       : 0;
 
-  // The project's Tabs is a left rail, not a top strip; overriding it to a
-  // column was what pushed the panels past the dialog's edge.
+  // The project's Tabs is a left rail, not a top strip. `min-w-0` matters as
+  // much as the direction: DialogContent lays its children out in a grid, and a
+  // grid item keeps min-width:auto, so a long unbroken DBus message stretches
+  // the whole dialog rather than being clipped inside it.
   return (
-    <Tabs defaultValue="summary" className="min-h-0 items-start">
+    <Tabs defaultValue="summary" className="min-h-0 min-w-0 items-start">
       <TabsList className="w-32">
         <TabsTrigger value="summary">Summary</TabsTrigger>
         <TabsTrigger value="diagnostics">
@@ -80,7 +82,7 @@ function OverviewBody({ logs, fileName, onJumpToLog }: OverviewDialogProps) {
         {boot && <TabsTrigger value="boot">Boot</TabsTrigger>}
       </TabsList>
 
-      <div className="flex-1 min-w-0 overflow-y-auto max-h-[58vh] scrollbar-container pr-1">
+      <div className="flex-1 min-w-0 overflow-x-hidden overflow-y-auto max-h-[58vh] scrollbar-container pr-1">
         <TabsContent value="summary" className="flex flex-col gap-3 m-0">
           <div className="grid grid-cols-4 gap-2">
             <Stat label="Lines" value={overview.lines.toLocaleString()} />
@@ -107,7 +109,7 @@ function OverviewBody({ logs, fileName, onJumpToLog }: OverviewDialogProps) {
               <div className="flex flex-col">
                 {overview.noisiestSections.map((section) => (
                   <div key={section.name} className="flex items-baseline gap-2 text-xs py-0.5">
-                    <span className="truncate flex-1 font-mono" title={section.name}>
+                    <span className="truncate flex-1 min-w-0 font-mono" title={section.name}>
                       {section.name}
                     </span>
                     {section.errors > 0 && (
@@ -126,7 +128,7 @@ function OverviewBody({ logs, fileName, onJumpToLog }: OverviewDialogProps) {
               <div className="flex flex-col">
                 {overview.topProcesses.map((process) => (
                   <div key={process.name} className="flex items-baseline gap-2 text-xs py-0.5">
-                    <span className="truncate flex-1 font-mono" title={process.name}>
+                    <span className="truncate flex-1 min-w-0 font-mono" title={process.name}>
                       {process.name}
                     </span>
                     <span className="text-muted-foreground tabular-nums">
@@ -164,7 +166,9 @@ function OverviewBody({ logs, fileName, onJumpToLog }: OverviewDialogProps) {
                       <style.Icon className="size-3" />
                       {finding.rule.severity}
                     </span>
-                    <span className="text-sm font-medium truncate">{finding.rule.title}</span>
+                    <span className="text-sm font-medium truncate min-w-0">
+                      {finding.rule.title}
+                    </span>
                     <span className="text-xs text-muted-foreground tabular-nums ml-auto shrink-0 whitespace-nowrap">
                       {finding.count}× · first {clock(finding.firstTs).slice(11)}
                     </span>
@@ -202,7 +206,10 @@ function OverviewBody({ logs, fileName, onJumpToLog }: OverviewDialogProps) {
               >
                 {cluster.level}
               </span>
-              <span className="text-[11px] font-mono truncate flex-1" title={cluster.template}>
+              <span
+                className="text-[11px] font-mono truncate flex-1 min-w-0"
+                title={cluster.template}
+              >
                 {cluster.template}
               </span>
               <span className="text-[10px] text-muted-foreground truncate w-32 shrink-0">
@@ -233,7 +240,7 @@ function OverviewBody({ logs, fileName, onJumpToLog }: OverviewDialogProps) {
                 const widest = Math.max(...boot.steps.map((other) => other.deltaMs));
                 return (
                   <div key={`${step.event}-${index}`} className="flex items-center gap-2 py-0.5">
-                    <span className="text-[11px] font-mono truncate w-52 shrink-0">
+                    <span className="text-[11px] font-mono truncate w-52 shrink-0 min-w-0">
                       {step.event}
                     </span>
                     <div className="flex-1 h-2.5 bg-muted rounded-sm overflow-hidden">
