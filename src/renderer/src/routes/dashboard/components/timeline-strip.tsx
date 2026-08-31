@@ -13,13 +13,41 @@ interface Bucket {
   warnings: number;
 }
 
+const MICROS_PER_DAY = 86_400 * 1_000_000;
+
 const formatClock = (micros: number): string => new Date(micros / 1000).toISOString().slice(11, 19);
+
+const formatDate = (micros: number): string => new Date(micros / 1000).toISOString().slice(0, 10);
+
+const formatDayMonth = (micros: number): string =>
+  new Date(micros / 1000).toISOString().slice(5, 10);
+
+// Times alone are ambiguous once a log crosses midnight, and these often do:
+// a feedback archive can hold a companion service log from ten days earlier.
+const formatMoment = (micros: number, multiDay: boolean): string =>
+  multiDay ? `${formatDayMonth(micros)} ${formatClock(micros)}` : formatClock(micros);
 
 const formatSpan = (micros: number): string => {
   const seconds = micros / 1_000_000;
   if (seconds < 90) return `${seconds.toFixed(1)}s`;
   if (seconds < 5400) return `${(seconds / 60).toFixed(1)}min`;
-  return `${(seconds / 3600).toFixed(1)}h`;
+  if (seconds < 2 * 86_400) return `${(seconds / 3600).toFixed(1)}h`;
+  return `${(seconds / 86_400).toFixed(1)} days`;
+};
+
+/** UTC midnights inside the range, so day changes are visible on the strip. */
+const dayBoundaries = (min: number, max: number): number[] => {
+  const first = new Date(min / 1000);
+  let at = Date.UTC(first.getUTCFullYear(), first.getUTCMonth(), first.getUTCDate() + 1) * 1000;
+
+  const ticks: number[] = [];
+  // A multi-year log would otherwise draw hundreds of lines; past this many the
+  // boundaries stop carrying information anyway.
+  while (at <= max && ticks.length < 400) {
+    ticks.push(at);
+    at += MICROS_PER_DAY;
+  }
+  return ticks;
 };
 
 /**
@@ -35,19 +63,27 @@ export const TimelineStrip = ({ logs }: { logs: ExtendedLog[] }) => {
   const [drag, setDrag] = useState<{ from: number; to: number } | null>(null);
   const [hover, setHover] = useState<number | null>(null);
 
-  // Built from the unfiltered set so the shape stays put while you narrow it;
-  // a histogram that redraws itself on every click is impossible to aim at.
+  // Counts come from the unfiltered set, so the shape does not move while you
+  // narrow it; a histogram that redraws on every click is impossible to aim at.
   const model = useMemo(() => {
-    let min = Infinity;
-    let max = -Infinity;
+    let extentMin = Infinity;
+    let extentMax = -Infinity;
     for (const log of logs) {
       if (typeof log.ts !== "number") continue;
-      if (log.ts < min) min = log.ts;
-      if (log.ts > max) max = log.ts;
+      if (log.ts < extentMin) extentMin = log.ts;
+      if (log.ts > extentMax) extentMax = log.ts;
     }
-    if (min === Infinity || max <= min) return null;
+    if (extentMin === Infinity || extentMax <= extentMin) return null;
 
+    // An explicit window becomes the strip's own range, so dragging zooms as
+    // well as filters. Feedback archives routinely hold a companion service log
+    // reaching back weeks, which would otherwise squeeze the dump everyone
+    // actually came for into a pixel at the right edge.
+    const min = timeRange ? Math.max(extentMin, timeRange.from) : extentMin;
+    const max = timeRange ? Math.min(extentMax, timeRange.to) : extentMax;
     const span = max - min;
+    if (span <= 0) return null;
+
     const buckets: Bucket[] = Array.from({ length: BUCKET_COUNT }, () => ({
       total: 0,
       errors: 0,
@@ -55,7 +91,7 @@ export const TimelineStrip = ({ logs }: { logs: ExtendedLog[] }) => {
     }));
 
     for (const log of logs) {
-      if (typeof log.ts !== "number") continue;
+      if (typeof log.ts !== "number" || log.ts < min || log.ts > max) continue;
       const index = Math.min(BUCKET_COUNT - 1, Math.floor(((log.ts - min) / span) * BUCKET_COUNT));
       const bucket = buckets[index];
       bucket.total++;
@@ -63,8 +99,22 @@ export const TimelineStrip = ({ logs }: { logs: ExtendedLog[] }) => {
       else if (log.level === "WARN") bucket.warnings++;
     }
 
-    return { min, max, span, buckets, peak: Math.max(...buckets.map((b) => b.total)) };
-  }, [logs]);
+    const days = dayBoundaries(min, max);
+    const peak = Math.max(...buckets.map((bucket) => bucket.total));
+    return {
+      min,
+      max,
+      span,
+      buckets,
+      peak: peak === 0 ? 1 : peak,
+      days,
+      multiDay: days.length > 0,
+      // Label every nth boundary so the dates stay readable on a long log.
+      labelEvery: Math.max(1, Math.ceil(days.length / 8)),
+      isZoomed: timeRange !== null,
+      extentSpan: extentMax - extentMin
+    };
+  }, [logs, timeRange]);
 
   if (!model) return null;
 
@@ -77,10 +127,11 @@ export const TimelineStrip = ({ logs }: { logs: ExtendedLog[] }) => {
 
   const ratioOf = (micros: number) => ((micros - model.min) / model.span) * 100;
 
-  const selection = drag ?? timeRange;
-  const selectionLeft = selection ? ratioOf(Math.min(selection.from, selection.to)) : 0;
-  const selectionWidth = selection
-    ? Math.max(0.4, ratioOf(Math.max(selection.from, selection.to)) - selectionLeft)
+  // Only the in-progress drag is drawn: once released, the window becomes the
+  // strip's range, so an overlay would just cover the whole track.
+  const selectionLeft = drag ? ratioOf(Math.min(drag.from, drag.to)) : 0;
+  const selectionWidth = drag
+    ? Math.max(0.4, ratioOf(Math.max(drag.from, drag.to)) - selectionLeft)
     : 0;
 
   return (
@@ -134,7 +185,22 @@ export const TimelineStrip = ({ logs }: { logs: ExtendedLog[] }) => {
             );
           })}
 
-          {selection && (
+          {/* Midnights, so a log that runs across days does not read as one. */}
+          {model.days.map((at, index) => (
+            <div
+              key={at}
+              className="absolute inset-y-0 border-l border-dashed border-foreground/25 pointer-events-none"
+              style={{ left: `${ratioOf(at)}%` }}
+            >
+              {index % model.labelEvery === 0 && (
+                <span className="absolute top-0 left-1 text-[9px] leading-none text-muted-foreground bg-background/80 px-0.5 rounded-sm tabular-nums">
+                  {formatDayMonth(at)}
+                </span>
+              )}
+            </div>
+          ))}
+
+          {drag && (
             <div
               className="absolute inset-y-0 bg-primary/15 border-x border-primary/70 pointer-events-none"
               style={{ left: `${selectionLeft}%`, width: `${selectionWidth}%` }}
@@ -153,34 +219,39 @@ export const TimelineStrip = ({ logs }: { logs: ExtendedLog[] }) => {
         </div>
 
         <div className="flex items-center justify-between text-[10px] text-muted-foreground tabular-nums leading-tight">
-          <span>{formatClock(model.min)}</span>
+          <span>{formatMoment(model.min, model.multiDay)}</span>
           <span className={cn(hover === null && "opacity-0")}>
-            {hover !== null && formatClock(hover)}
+            {hover !== null && formatMoment(hover, model.multiDay)}
           </span>
-          <span>{formatClock(model.max)}</span>
+          <span>{formatMoment(model.max, model.multiDay)}</span>
         </div>
       </div>
 
       <div className="w-32 shrink-0 flex flex-col justify-center text-[10px] leading-tight">
-        {timeRange ? (
-          <>
-            <div className="text-foreground font-medium tabular-nums">
-              {formatClock(timeRange.from)} – {formatClock(timeRange.to)}
-            </div>
-            <button
-              type="button"
-              className="text-primary hover:underline inline-flex items-center gap-0.5 w-fit"
-              onClick={() => setTimeRange(null)}
-            >
-              <X className="size-2.5" />
-              clear window
-            </button>
-          </>
+        <div className="text-foreground font-medium tabular-nums">
+          {formatSpan(model.span)}
+          {model.isZoomed && (
+            <span className="text-muted-foreground font-normal">
+              {" "}
+              of {formatSpan(model.extentSpan)}
+            </span>
+          )}
+        </div>
+
+        {model.isZoomed ? (
+          <button
+            type="button"
+            className="text-primary hover:underline inline-flex items-center gap-0.5 w-fit"
+            onClick={() => setTimeRange(null)}
+          >
+            <X className="size-2.5" />
+            show everything
+          </button>
         ) : (
-          <>
-            <div className="text-muted-foreground tabular-nums">spans {formatSpan(model.span)}</div>
-            <div className="text-muted-foreground/60">drag to narrow</div>
-          </>
+          // On a single-day log the date appears nowhere else on screen.
+          <div className="text-muted-foreground/60 tabular-nums">
+            {model.multiDay ? "UTC · drag to zoom" : `${formatDate(model.min)} UTC`}
+          </div>
         )}
       </div>
     </div>
