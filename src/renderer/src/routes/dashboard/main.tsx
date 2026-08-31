@@ -23,7 +23,7 @@ import { cn } from "@renderer/lib/utils";
 
 import { SearchBar } from "./components/search-bar";
 import { CommandPalette } from "./components/command-palette";
-import { OverviewDialog } from "./components/overview-dialog";
+import { OverviewPanel } from "./components/overview-panel";
 import { MetricsView } from "./components/metrics-view";
 import { HierarchyView } from "./components/hierarchy-view";
 import { useLogProcessing } from "./hooks/use-log-processing";
@@ -54,6 +54,8 @@ function RouteComponent() {
   const [isMergedView, setIsMergedView] = useState(false);
   const [isResultsOpen, setIsResultsOpen] = useState(false);
   const [hierarchyKey, setHierarchyKey] = useState<string | null>(null);
+  // What the log says comes before the log itself, so this is where you land.
+  const [view, setView] = useState<"overview" | "log">("overview");
 
   const [searchQuery] = useAtom(searchQueryAtom);
   const parsedQuery = useMemo(() => parseQuery(searchQuery), [searchQuery]);
@@ -156,6 +158,8 @@ function RouteComponent() {
         return;
       }
       setHierarchyKey(null);
+      // Picking a section means you want to read it.
+      setView("log");
 
       const fileName = key.split("::")[0];
       if (fileName !== selectedFileName) {
@@ -240,87 +244,129 @@ function RouteComponent() {
           </>
         ) : (
           <>
-            {/* Search sits with the list it searches rather than up in the title bar. */}
-            <div className="px-2 py-1.5 border-b bg-background shrink-0">
-              <SearchBar
-                parsed={parsedQuery}
-                matchCount={matchIndices.length}
-                processes={processes}
-                sections={sectionNames}
-                levels={levelNames}
-                inputRef={searchInputRef}
-              />
+            {/* One switch, always in the same place, so neither view is buried. */}
+            <div className="px-2 py-1.5 border-b bg-background shrink-0 flex items-center gap-2">
+              <div className="flex rounded-md border p-0.5 shrink-0">
+                {(["overview", "log"] as const).map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => setView(option)}
+                    className={cn(
+                      "h-5 px-2.5 rounded text-xs font-medium capitalize transition-colors",
+                      view === option
+                        ? "bg-primary/10 text-primary"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    {option}
+                  </button>
+                ))}
+              </div>
+
+              {view === "log" && (
+                <SearchBar
+                  parsed={parsedQuery}
+                  matchCount={matchIndices.length}
+                  processes={processes}
+                  sections={sectionNames}
+                  levels={levelNames}
+                  inputRef={searchInputRef}
+                />
+              )}
             </div>
 
-            <CommandPalette
-              sectionKeys={logStructure[selectedFileName ?? ""] ?? []}
-              onGoToSection={scrollToSection}
-              onFocusSearch={() => searchInputRef.current?.focus()}
-              onToggleMerge={() => setIsMergedView((merged) => !merged)}
-            />
-
-            <TimelineStrip logs={allLogs} events={events} />
-
-            <div className="px-2 py-1.5 border-b bg-background shrink-0 flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => setIsMergedView(!isMergedView)}
-                className={cn(
-                  "h-6 px-2 rounded-md text-xs font-medium inline-flex items-center gap-1.5 transition-colors border shrink-0",
-                  isMergedView
-                    ? "border-primary/60 bg-primary/10 text-primary"
-                    : "border-transparent bg-muted/40 text-muted-foreground hover:bg-muted"
-                )}
-                title="Interleave every section on one timeline"
-              >
-                <Clock className="size-3" />
-                Merge
-              </button>
-
-              <OverviewDialog
+            {view === "overview" ? (
+              <OverviewPanel
                 logs={allLogs}
                 fileName={selectedFileName}
                 onJumpToLog={(log) => {
                   const index = visibleLogs.indexOf(log);
+                  setView("log");
                   if (index >= 0) {
-                    virtuosoRef.current?.scrollToIndex({ index, align: "center" });
+                    // The list has to exist before it can be scrolled.
+                    window.setTimeout(
+                      () => virtuosoRef.current?.scrollToIndex({ index, align: "center" }),
+                      0
+                    );
                   }
                 }}
               />
+            ) : (
+              <>
+                <div className="hidden">
+                  <SearchBar
+                    parsed={parsedQuery}
+                    matchCount={matchIndices.length}
+                    processes={processes}
+                    sections={sectionNames}
+                    levels={levelNames}
+                    inputRef={searchInputRef}
+                  />
+                </div>
 
-              <div className="h-4 w-px bg-border" />
+                <CommandPalette
+                  sectionKeys={logStructure[selectedFileName ?? ""] ?? []}
+                  onGoToSection={scrollToSection}
+                  onFocusSearch={() => {
+                    // The search box only exists in the log view.
+                    setView("log");
+                    window.setTimeout(() => searchInputRef.current?.focus(), 0);
+                  }}
+                  onToggleMerge={() => setIsMergedView((merged) => !merged)}
+                />
 
-              <FilterBar
-                levelCounts={levelCounts}
-                processes={processes}
-                visibleCount={visibleLogs.length}
-                totalCount={allLogs.length}
-              />
-            </div>
+                <TimelineStrip logs={allLogs} events={events} />
 
-            <LogList
-              logs={visibleLogs}
-              fileIndices={fileIndices}
-              activeFile={activeFile}
-              onActiveFileChange={setActiveFile}
-              isMergedView={isMergedView}
-              expandedIds={expandedIds}
-              onToggleExpand={toggleExpand}
-              patterns={patterns}
-              virtuosoRef={virtuosoRef}
-              highlightedIndex={activeMatchLogIndex}
-            />
+                <div className="px-2 py-1.5 border-b bg-background shrink-0 flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setIsMergedView(!isMergedView)}
+                    className={cn(
+                      "h-6 px-2 rounded-md text-xs font-medium inline-flex items-center gap-1.5 transition-colors border shrink-0",
+                      isMergedView
+                        ? "border-primary/60 bg-primary/10 text-primary"
+                        : "border-transparent bg-muted/40 text-muted-foreground hover:bg-muted"
+                    )}
+                    title="Interleave every section on one timeline"
+                  >
+                    <Clock className="size-3" />
+                    Merge
+                  </button>
 
-            <SearchResultsPanel
-              logs={visibleLogs}
-              matchIndices={matchIndices}
-              activeMatchIndex={activeMatchLogIndex}
-              isOpen={isResultsOpen}
-              onToggle={() => setIsResultsOpen(!isResultsOpen)}
-              onJumpTo={(index) =>
-                virtuosoRef.current?.scrollToIndex({ index, align: "center", behavior: "auto" })
-              }
-            />
+                  <FilterBar
+                    levelCounts={levelCounts}
+                    processes={processes}
+                    visibleCount={visibleLogs.length}
+                    totalCount={allLogs.length}
+                  />
+                </div>
+
+                <LogList
+                  logs={visibleLogs}
+                  fileIndices={fileIndices}
+                  activeFile={activeFile}
+                  onActiveFileChange={setActiveFile}
+                  isMergedView={isMergedView}
+                  expandedIds={expandedIds}
+                  onToggleExpand={toggleExpand}
+                  patterns={patterns}
+                  virtuosoRef={virtuosoRef}
+                  highlightedIndex={activeMatchLogIndex}
+                />
+
+                <SearchResultsPanel
+                  logs={visibleLogs}
+                  matchIndices={matchIndices}
+                  activeMatchIndex={activeMatchLogIndex}
+                  isOpen={isResultsOpen}
+                  onToggle={() => setIsResultsOpen(!isResultsOpen)}
+                  onJumpTo={(index) =>
+                    virtuosoRef.current?.scrollToIndex({ index, align: "center", behavior: "auto" })
+                  }
+                />
+              </>
+            )}
           </>
         )}
       </div>

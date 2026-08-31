@@ -1,15 +1,6 @@
 import { useMemo, useState } from "react";
 import { useAtomValue } from "jotai";
-import { AlertTriangle, Info, LayoutDashboard, ShieldAlert } from "lucide-react";
-import { Button } from "@vibeus/ui";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger
-} from "@renderer/components/ui/dialog";
+import { AlertTriangle, Info, ShieldAlert } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@renderer/components/ui/tabs";
 import { Input } from "@renderer/components/ui/input";
 import { cn } from "@renderer/lib/utils";
@@ -27,7 +18,7 @@ import type { RuleSeverity } from "@renderer/lib/log-rules";
 import { inspectStorage } from "@renderer/lib/log-storage";
 import { ExtendedLog } from "../types";
 
-interface OverviewDialogProps {
+interface OverviewPanelProps {
   logs: ExtendedLog[];
   fileName: string | null;
   onJumpToLog: (log: ExtendedLog) => void;
@@ -53,9 +44,9 @@ const Stat = ({ label, value, hint }: { label: string; value: string; hint?: str
   </div>
 );
 
-// Everything here is computed on open: a pass over a hundred thousand rows is
-// about 200ms, which is fine on demand and would not be during load.
-function OverviewBody({ logs, fileName, onJumpToLog }: OverviewDialogProps) {
+// A pass over a hundred thousand rows is about 200ms, which is why this is the
+// landing view rather than something computed during load.
+export function OverviewPanel({ logs, fileName, onJumpToLog }: OverviewPanelProps) {
   const logFiles = useAtomValue(logFilesAtom);
   const overview = useMemo(() => analyseLogs(logs), [logs]);
 
@@ -106,12 +97,11 @@ function OverviewBody({ logs, fileName, onJumpToLog }: OverviewDialogProps) {
       ? (overview.lastTs - overview.firstTs) / 1000
       : 0;
 
-  // The project's Tabs is a left rail, not a top strip. `min-w-0` matters as
-  // much as the direction: DialogContent lays its children out in a grid, and a
-  // grid item keeps min-width:auto, so a long unbroken DBus message stretches
-  // the whole dialog rather than being clipped inside it.
+  // The project's Tabs is a left rail, not a top strip. `min-w-0` on it and on
+  // every span that should shrink is what lets a long unbroken DBus message be
+  // clipped rather than widen the panel.
   return (
-    <Tabs defaultValue="summary" className="min-h-0 min-w-0 items-start">
+    <Tabs defaultValue="summary" className="flex-1 min-h-0 min-w-0 items-start p-3">
       <TabsList className="w-32">
         <TabsTrigger value="summary">Summary</TabsTrigger>
         <TabsTrigger value="diagnostics">
@@ -127,7 +117,7 @@ function OverviewBody({ logs, fileName, onJumpToLog }: OverviewDialogProps) {
         {metrics && <TabsTrigger value="metrics">Metrics</TabsTrigger>}
       </TabsList>
 
-      <div className="flex-1 min-w-0 overflow-x-hidden overflow-y-auto max-h-[58vh] scrollbar-container pr-1">
+      <div className="flex-1 min-w-0 h-full overflow-x-hidden overflow-y-auto scrollbar-container pr-1">
         <TabsContent value="summary" className="flex flex-col gap-3 m-0">
           <div className="grid grid-cols-4 gap-2">
             <Stat label="Lines" value={overview.lines.toLocaleString()} />
@@ -404,37 +394,5 @@ function OverviewBody({ logs, fileName, onJumpToLog }: OverviewDialogProps) {
         )}
       </div>
     </Tabs>
-  );
-}
-
-export function OverviewDialog(props: OverviewDialogProps) {
-  const [isOpen, setIsOpen] = useState(false);
-
-  return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild>
-        <Button variant="text" className="h-6 text-xs px-2 gap-1" title="Overview and diagnostics">
-          <LayoutDashboard className="h-3.5 w-3.5" />
-          Overview
-        </Button>
-      </DialogTrigger>
-
-      <DialogContent className="sm:max-w-4xl">
-        <DialogHeader>
-          <DialogTitle>Overview</DialogTitle>
-          <DialogDescription>What this log says before you start reading it.</DialogDescription>
-        </DialogHeader>
-
-        {isOpen && (
-          <OverviewBody
-            {...props}
-            onJumpToLog={(log) => {
-              props.onJumpToLog(log);
-              setIsOpen(false);
-            }}
-          />
-        )}
-      </DialogContent>
-    </Dialog>
   );
 }
