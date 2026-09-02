@@ -83,154 +83,166 @@ export const FilterBar = ({
     .slice(0, 200);
 
   return (
-    <div className="flex flex-1 min-w-0 items-start gap-2">
-      <div className="flex-1 min-w-0 flex flex-wrap items-center gap-1.5">
-        {LEVELS.map((level) => {
-          const count = levelCounts[level.name] ?? 0;
-          const isOn = levels.has(level.name);
-          return (
-            <button
-              key={level.name}
-              type="button"
-              disabled={count === 0}
-              onClick={() => setLevels(toggle(levels, level.name))}
-              className={cn(
-                "h-6 pl-1.5 pr-2 rounded-md border text-xs font-medium inline-flex items-center gap-1.5 transition-colors",
-                "disabled:opacity-35 disabled:cursor-not-allowed",
-                isOn
-                  ? level.active
-                  : "border-transparent bg-muted/40 text-muted-foreground hover:bg-muted"
-              )}
-              title={`${count.toLocaleString()} ${level.label} lines`}
-            >
-              <span className={cn("size-1.5 rounded-full", level.dot)} />
-              {level.label}
-              <span className="tabular-nums opacity-60">{compact(count)}</span>
-            </button>
-          );
-        })}
-
-        <div className="h-4 w-px bg-border mx-1" />
-
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button
-              variant="ghost"
-              size="sm"
-              className={cn(
-                "h-6 px-2 text-xs gap-1",
-                processFilter.size > 0 && "bg-primary/10 text-primary"
-              )}
-            >
-              <Filter className="size-3" />
-              Process
-              {processFilter.size > 0 && (
-                <Badge variant="secondary" className="h-4 px-1 text-[10px] tabular-nums">
-                  {processFilter.size}
-                </Badge>
-              )}
-              <ChevronDown className="size-3 opacity-50" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent align="start" className="w-72 p-0">
-            <div className="p-2 border-b">
-              <Input
-                value={processQuery}
-                onChange={(event) => setProcessQuery(event.target.value)}
-                placeholder="Find a process..."
-                className="h-7 text-xs"
-              />
-            </div>
-            <ScrollArea className="h-64">
-              <div className="p-1">
-                {shownProcesses.length === 0 && (
-                  <p className="text-xs text-muted-foreground p-3 text-center">
-                    No process matches.
-                  </p>
+    <div className="flex flex-1 min-w-0 items-center gap-2">
+      {/* One line that scrolls. Wrapping cannot hold a stable height when
+          controls appear and disappear, and a row that changes height under the
+          cursor that clicked it is worse than one that hides a chip. The fade
+          says there is more to the right; over an empty row it is invisible,
+          so it needs no measuring. */}
+      <div className="relative flex-1 min-w-0">
+        <div className="flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {LEVELS.map((level) => {
+            const count = levelCounts[level.name] ?? 0;
+            const isOn = levels.has(level.name);
+            return (
+              <button
+                key={level.name}
+                type="button"
+                disabled={count === 0}
+                onClick={() => setLevels(toggle(levels, level.name))}
+                className={cn(
+                  "h-6 pl-1.5 pr-2 rounded-md border text-xs font-medium inline-flex items-center gap-1.5 transition-colors",
+                  "disabled:opacity-35 disabled:cursor-not-allowed",
+                  isOn
+                    ? level.active
+                    : "border-transparent bg-muted/40 text-muted-foreground hover:bg-muted"
                 )}
-                {shownProcesses.map((entry) => {
-                  const isOn = processFilter.has(entry.name);
-                  return (
-                    <button
-                      key={entry.name}
-                      type="button"
-                      onClick={() => setProcessFilter(toggle(processFilter, entry.name))}
-                      className="w-full flex items-center gap-2 px-2 py-1 rounded text-xs hover:bg-muted text-left"
-                    >
-                      <Check className={cn("size-3 shrink-0", !isOn && "opacity-0")} />
-                      <span className="font-mono truncate flex-1" title={entry.name}>
-                        {entry.name}
-                      </span>
-                      <span className="tabular-nums text-muted-foreground">
-                        {compact(entry.count)}
-                      </span>
-                    </button>
-                  );
-                })}
+                title={`${count.toLocaleString()} ${level.label} lines`}
+              >
+                <span className={cn("size-1.5 rounded-full", level.dot)} />
+                {level.label}
+                <span className="tabular-nums opacity-60">{compact(count)}</span>
+              </button>
+            );
+          })}
+
+          <div className="h-4 w-px bg-border mx-1" />
+
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className={cn(
+                  "h-6 px-2 text-xs gap-1",
+                  processFilter.size > 0 && "bg-primary/10 text-primary"
+                )}
+              >
+                <Filter className="size-3" />
+                Process
+                {processFilter.size > 0 && (
+                  <Badge variant="secondary" className="h-4 px-1 text-[10px] tabular-nums">
+                    {processFilter.size}
+                  </Badge>
+                )}
+                <ChevronDown className="size-3 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-72 p-0">
+              <div className="p-2 border-b">
+                <Input
+                  value={processQuery}
+                  onChange={(event) => setProcessQuery(event.target.value)}
+                  placeholder="Find a process..."
+                  className="h-7 text-xs"
+                />
               </div>
-            </ScrollArea>
-          </PopoverContent>
-        </Popover>
-
-        {tags.length > 0 && (
-          <>
-            <div className="h-4 w-px bg-border mx-0.5" />
-            <TagIcon className="size-3 text-muted-foreground shrink-0" />
-            {tags.slice(0, INLINE_TAGS).map((tag) => {
-              const isOn = tagFilter.has(tag.name);
-              return (
-                <button
-                  key={tag.name}
-                  type="button"
-                  onClick={() => setTagFilter(toggle(tagFilter, tag.name))}
-                  className={cn(
-                    "h-6 px-2 rounded-md border text-xs inline-flex items-center gap-1.5 transition-colors",
-                    // Same colour the tag wears on the log rows, so the chip and
-                    // the thing it selects read as one; lighter than the level
-                    // chips because severity is the more important dimension.
-                    isOn
-                      ? "border-primary/60 bg-primary/15 text-primary font-medium"
-                      : "border-transparent bg-primary/8 text-primary/75 hover:bg-primary/15"
+              <ScrollArea className="h-64">
+                <div className="p-1">
+                  {shownProcesses.length === 0 && (
+                    <p className="text-xs text-muted-foreground p-3 text-center">
+                      No process matches.
+                    </p>
                   )}
-                  title={`${tag.count.toLocaleString()} lines tagged ${tag.name}`}
-                >
-                  {tag.name}
-                  <span className="tabular-nums opacity-60">{compact(tag.count)}</span>
-                </button>
-              );
-            })}
-
-            {tags.length > INLINE_TAGS && (
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="ghost" size="sm" className="h-6 px-2 text-xs">
-                    +{tags.length - INLINE_TAGS}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent align="start" className="w-64 p-1">
-                  <ScrollArea className="h-56">
-                    {tags.slice(INLINE_TAGS).map((tag) => (
+                  {shownProcesses.map((entry) => {
+                    const isOn = processFilter.has(entry.name);
+                    return (
                       <button
-                        key={tag.name}
+                        key={entry.name}
                         type="button"
-                        onClick={() => setTagFilter(toggle(tagFilter, tag.name))}
+                        onClick={() => setProcessFilter(toggle(processFilter, entry.name))}
                         className="w-full flex items-center gap-2 px-2 py-1 rounded text-xs hover:bg-muted text-left"
                       >
-                        <Check
-                          className={cn("size-3 shrink-0", !tagFilter.has(tag.name) && "opacity-0")}
-                        />
-                        <span className="truncate flex-1 min-w-0">{tag.name}</span>
+                        <Check className={cn("size-3 shrink-0", !isOn && "opacity-0")} />
+                        <span className="font-mono truncate flex-1" title={entry.name}>
+                          {entry.name}
+                        </span>
                         <span className="tabular-nums text-muted-foreground">
-                          {compact(tag.count)}
+                          {compact(entry.count)}
                         </span>
                       </button>
-                    ))}
-                  </ScrollArea>
-                </PopoverContent>
-              </Popover>
-            )}
-          </>
-        )}
+                    );
+                  })}
+                </div>
+              </ScrollArea>
+            </PopoverContent>
+          </Popover>
+
+          {tags.length > 0 && (
+            <>
+              <div className="h-4 w-px bg-border mx-0.5" />
+              <TagIcon className="size-3 text-muted-foreground shrink-0" />
+              {tags.slice(0, INLINE_TAGS).map((tag) => {
+                const isOn = tagFilter.has(tag.name);
+                return (
+                  <button
+                    key={tag.name}
+                    type="button"
+                    onClick={() => setTagFilter(toggle(tagFilter, tag.name))}
+                    className={cn(
+                      "h-6 px-2 rounded-md border text-xs inline-flex items-center gap-1.5 transition-colors",
+                      // Same colour the tag wears on the log rows, so the chip and
+                      // the thing it selects read as one; lighter than the level
+                      // chips because severity is the more important dimension.
+                      isOn
+                        ? "border-primary/60 bg-primary/15 text-primary font-medium"
+                        : "border-transparent bg-primary/8 text-primary/75 hover:bg-primary/15"
+                    )}
+                    title={`${tag.count.toLocaleString()} lines tagged ${tag.name}`}
+                  >
+                    {tag.name}
+                    <span className="tabular-nums opacity-60">{compact(tag.count)}</span>
+                  </button>
+                );
+              })}
+
+              {tags.length > INLINE_TAGS && (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="ghost" size="sm" className="h-6 px-2 text-xs">
+                      +{tags.length - INLINE_TAGS}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent align="start" className="w-64 p-1">
+                    <ScrollArea className="h-56">
+                      {tags.slice(INLINE_TAGS).map((tag) => (
+                        <button
+                          key={tag.name}
+                          type="button"
+                          onClick={() => setTagFilter(toggle(tagFilter, tag.name))}
+                          className="w-full flex items-center gap-2 px-2 py-1 rounded text-xs hover:bg-muted text-left"
+                        >
+                          <Check
+                            className={cn(
+                              "size-3 shrink-0",
+                              !tagFilter.has(tag.name) && "opacity-0"
+                            )}
+                          />
+                          <span className="truncate flex-1 min-w-0">{tag.name}</span>
+                          <span className="tabular-nums text-muted-foreground">
+                            {compact(tag.count)}
+                          </span>
+                        </button>
+                      ))}
+                    </ScrollArea>
+                  </PopoverContent>
+                </Popover>
+              )}
+            </>
+          )}
+        </div>
+
+        <div className="pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-background to-transparent" />
       </div>
 
       {/* Outside the scroller: appearing here must never reflow the chips, which
