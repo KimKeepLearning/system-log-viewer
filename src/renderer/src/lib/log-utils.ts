@@ -35,6 +35,9 @@ export const formatLogLine = (log: IUserLog): string => {
     parts.push(log.level ? `${log.process}:` : log.process);
   }
   if (log.source) parts.push(`[${log.source}]`);
+  // The tag was lifted out of the message for display, so it has to go back or
+  // the copied line is not the line that was on screen.
+  if (log.tag) parts.push(`[${log.tag}]`);
   if (log.message) parts.push(log.message);
 
   return parts.join(" ");

@@ -21,6 +21,7 @@ interface SearchBarProps {
   processes: { name: string; count: number }[];
   sections: string[];
   levels: string[];
+  tags: string[];
   inputRef?: React.RefObject<HTMLInputElement | null>;
 }
 
@@ -31,6 +32,7 @@ const SYNTAX_HELP: [string, string][] = [
   ["level:error", "only errors — repeat the field to allow several"],
   ["process:chrome", "matches chrome[1016:1016] too"],
   ["section:dmesg", "one section"],
+  ['tag:"AI Subscription"', "a subsystem label the code stamped on the line"],
   ["/pipe.*closed/", "a regular expression, when you really want one"]
 ];
 
@@ -47,6 +49,7 @@ export const SearchBar = ({
   processes,
   sections,
   levels,
+  tags,
   inputRef: externalRef
 }: SearchBarProps) => {
   const [query, setQuery] = useAtom(searchQueryAtom);
@@ -85,7 +88,13 @@ export const SearchBar = ({
               ? levels
                   .filter((name) => name.toLowerCase().includes(typed))
                   .map((name) => ({ insert: `${prefix}level:${name}`, label: name }))
-              : [];
+              : field === "tag"
+                ? tags
+                    .filter((name) => name.toLowerCase().includes(typed))
+                    .slice(0, 8)
+                    // Tags contain spaces, so a completion has to quote itself.
+                    .map((name) => ({ insert: `${prefix}tag:"${name}"`, label: name }))
+                : [];
       return values;
     }
 
@@ -95,7 +104,7 @@ export const SearchBar = ({
       label: `${field}:`,
       hint: "field"
     }));
-  }, [query, processes, sections, levels]);
+  }, [query, processes, sections, levels, tags]);
 
   const isOpen = isFocused && suggestions.length > 0;
 

@@ -79,6 +79,16 @@ const parseStandardLogLine = (line: string): IUserLog | null => {
     message = sourceMatch[2];
   }
 
+  // What remains may start with a subsystem label the code chose, as in
+  // `[AI Subscription] ...`. Words and spaces only, and no slash: that keeps
+  // paths, `[0831/061736]` sampler stamps and bare `[dbus/o` truncations out.
+  let tag: string | undefined;
+  const tagMatch = message.match(/^\[([A-Za-z][A-Za-z0-9 _.-]{1,30})\]\s+(.*)$/);
+  if (tagMatch) {
+    tag = tagMatch[1];
+    message = tagMatch[2];
+  }
+
   return {
     timestamp: logMatch[1],
     ts,
@@ -86,6 +96,7 @@ const parseStandardLogLine = (line: string): IUserLog | null => {
     level: normalizeLevel(logMatch[2]),
     process: logMatch[3],
     source,
+    tag,
     message
   };
 };

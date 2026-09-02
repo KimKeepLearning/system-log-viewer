@@ -191,7 +191,8 @@ export const lifecycleEvents = (logs: AnalyzedLog[]): TimelineEvent[] => {
 export const timelineEvents = (
   sessions: BootSession[],
   findings: Finding[],
-  lifecycle: TimelineEvent[] = []
+  lifecycle: TimelineEvent[] = [],
+  capturedAt: number | null = null
 ): TimelineEvent[] => {
   const events: TimelineEvent[] = sessions.map((session, index) => ({
     ts: session.startTs,
@@ -201,6 +202,15 @@ export const timelineEvents = (
   }));
 
   events.push(...lifecycle);
+
+  if (capturedAt !== null) {
+    events.push({
+      ts: capturedAt,
+      label: "report sent",
+      kind: "lifecycle",
+      severity: "info"
+    });
+  }
 
   for (const finding of findings) {
     if (finding.rule.severity === "info") continue;
@@ -216,12 +226,66 @@ export const timelineEvents = (
   // Trim by importance, not by time: a chatty lifecycle label must never push a
   // failure off the axis. Only then sort back into chronological order.
   const weight = (event: TimelineEvent) =>
-    event.kind === "problem" ? 0 : event.label.startsWith("boot") ? 1 : 2;
+    event.kind === "problem"
+      ? 0
+      : event.label === "report sent"
+        ? 1
+        : event.label.startsWith("boot")
+          ? 2
+          : 3;
 
   return [...events]
     .sort((a, b) => weight(a) - weight(b))
     .slice(0, MAX_EVENTS)
     .sort((a, b) => a.ts - b.ts);
+};
+
+const MONTHS: Record<string, number> = {
+  Jan: 0,
+  Feb: 1,
+  Mar: 2,
+  Apr: 3,
+  May: 4,
+  Jun: 5,
+  Jul: 6,
+  Aug: 7,
+  Sep: 8,
+  Oct: 9,
+  Nov: 10,
+  Dec: 11
+};
+
+/**
+ * When the report was taken, from the LOGDATE section -- "Mon Aug 31 07:36:11
+ * UTC 2026". It is the moment someone pressed Send, and it is the end of the
+ * evidence: nothing after it exists, and anything close before it is what they
+ * were looking at when they decided to report.
+ *
+ * The UTC line is used rather than the local one beneath it, since everything
+ * else here is on the same clock.
+ */
+export const captureTime = (logDateSection: string): number | null => {
+  for (const line of logDateSection.split("\n")) {
+    const match = /^\w{3}\s+(\w{3})\s+(\d{1,2})\s+(\d{2}):(\d{2}):(\d{2})\s+UTC\s+(\d{4})$/.exec(
+      line.trim()
+    );
+    if (!match) continue;
+
+    const month = MONTHS[match[1]];
+    if (month === undefined) continue;
+
+    return (
+      Date.UTC(
+        Number(match[6]),
+        month,
+        Number(match[2]),
+        Number(match[3]),
+        Number(match[4]),
+        Number(match[5])
+      ) * 1000
+    );
+  }
+  return null;
 };
 
 export interface LogOverview {
