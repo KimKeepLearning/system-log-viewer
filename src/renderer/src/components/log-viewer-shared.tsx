@@ -50,6 +50,14 @@ export const LogRow = ({ log, isMain = true, patterns = NO_PATTERNS, children }:
             [<HighlightedText text={log.source} patterns={patterns} />]
           </span>
         )}
+        {log.tag && (
+          <span
+            data-log-field="tag"
+            className="mr-1 rounded-sm bg-primary/12 text-primary px-1 py-px text-[10px] font-semibold align-middle select-text"
+          >
+            {log.tag}
+          </span>
+        )}
         <span data-log-field="message" className="text-text-primary font-medium select-text">
           <b>
             <HighlightedText text={log.message} patterns={patterns} />

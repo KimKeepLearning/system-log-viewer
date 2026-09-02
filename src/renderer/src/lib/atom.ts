@@ -81,6 +81,9 @@ export type LogLevelName = "ERROR" | "WARN" | "INFO" | "DEBUG";
 export const levelFilterAtom = atom<Set<LogLevelName>>(new Set<LogLevelName>());
 export const processFilterAtom = atom<Set<string>>(new Set<string>());
 
+/** Subsystem labels the code stamped on a line, e.g. `[AI Subscription]`. */
+export const tagFilterAtom = atom<Set<string>>(new Set<string>());
+
 /** Section keys to show; empty means every section of the selected file. */
 export const sectionFilterAtom = atom<Set<string>>(new Set<string>());
 
@@ -99,6 +102,7 @@ export const hasActiveFiltersAtom = atom(
   (get) =>
     get(levelFilterAtom).size > 0 ||
     get(processFilterAtom).size > 0 ||
+    get(tagFilterAtom).size > 0 ||
     get(sectionFilterAtom).size > 0 ||
     get(timeRangeAtom) !== null ||
     (get(searchModeAtom) === "filter" && get(searchQueryAtom).length > 0)
@@ -107,6 +111,7 @@ export const hasActiveFiltersAtom = atom(
 export const clearFiltersAtom = atom(null, (_get, set) => {
   set(levelFilterAtom, new Set<LogLevelName>());
   set(processFilterAtom, new Set<string>());
+  set(tagFilterAtom, new Set<string>());
   set(sectionFilterAtom, new Set<string>());
   set(timeRangeAtom, null);
 });

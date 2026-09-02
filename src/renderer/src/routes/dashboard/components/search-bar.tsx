@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
-import { useAtom, useAtomValue } from "jotai";
-import { ArrowDown, ArrowUp, HelpCircle, Search, X } from "lucide-react";
+import { useAtom } from "jotai";
+import { ArrowDown, ArrowUp, HelpCircle, ListFilter, Search, X } from "lucide-react";
 import { cn } from "@renderer/lib/utils";
 import { Input } from "@renderer/components/ui/input";
 import { Button } from "@renderer/components/ui/button";
@@ -21,6 +21,7 @@ interface SearchBarProps {
   processes: { name: string; count: number }[];
   sections: string[];
   levels: string[];
+  tags: string[];
   inputRef?: React.RefObject<HTMLInputElement | null>;
 }
 
@@ -31,6 +32,7 @@ const SYNTAX_HELP: [string, string][] = [
   ["level:error", "only errors — repeat the field to allow several"],
   ["process:chrome", "matches chrome[1016:1016] too"],
   ["section:dmesg", "one section"],
+  ['tag:"AI Subscription"', "a subsystem label the code stamped on the line"],
   ["/pipe.*closed/", "a regular expression, when you really want one"]
 ];
 
@@ -47,11 +49,12 @@ export const SearchBar = ({
   processes,
   sections,
   levels,
+  tags,
   inputRef: externalRef
 }: SearchBarProps) => {
   const [query, setQuery] = useAtom(searchQueryAtom);
   const [currentMatch, setCurrentMatch] = useAtom(currentMatchIndexAtom);
-  const searchMode = useAtomValue(searchModeAtom);
+  const [searchMode, setSearchMode] = useAtom(searchModeAtom);
   const localRef = useRef<HTMLInputElement>(null);
   const inputRef = externalRef ?? localRef;
   const [isFocused, setIsFocused] = useState(false);
@@ -85,7 +88,13 @@ export const SearchBar = ({
               ? levels
                   .filter((name) => name.toLowerCase().includes(typed))
                   .map((name) => ({ insert: `${prefix}level:${name}`, label: name }))
-              : [];
+              : field === "tag"
+                ? tags
+                    .filter((name) => name.toLowerCase().includes(typed))
+                    .slice(0, 8)
+                    // Tags contain spaces, so a completion has to quote itself.
+                    .map((name) => ({ insert: `${prefix}tag:"${name}"`, label: name }))
+                : [];
       return values;
     }
 
@@ -95,7 +104,7 @@ export const SearchBar = ({
       label: `${field}:`,
       hint: "field"
     }));
-  }, [query, processes, sections, levels]);
+  }, [query, processes, sections, levels, tags]);
 
   const isOpen = isFocused && suggestions.length > 0;
 
@@ -212,7 +221,27 @@ export const SearchBar = ({
         )
       )}
 
-      <div className="flex">
+      {/* Filter or step: the two ways a query can be applied, so the switch
+          belongs with the query rather than among the filters. */}
+      <Button
+        variant="ghost"
+        size="sm"
+        className={cn(
+          "h-6 px-2 text-xs gap-1 shrink-0",
+          searchMode === "filter" && "bg-primary/10 text-primary"
+        )}
+        onClick={() => setSearchMode(searchMode === "filter" ? "highlight" : "filter")}
+        title={
+          searchMode === "filter"
+            ? "Showing only matches — click to step through them instead"
+            : "Stepping through matches — click to show only them"
+        }
+      >
+        <ListFilter className="size-3" />
+        {searchMode === "filter" ? "Only matches" : "Step"}
+      </Button>
+
+      <div className="flex shrink-0">
         <Button
           variant="ghost"
           size="sm"

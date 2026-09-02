@@ -41,6 +41,8 @@ interface LogListProps {
   patterns: RegExp[];
   virtuosoRef: React.RefObject<VirtuosoHandle | null>;
   highlightedIndex?: number;
+  /** Row to flash once on arrival; the token restarts the animation. */
+  flash?: { index: number; token: number } | null;
 }
 
 export const LogList = ({
@@ -53,7 +55,8 @@ export const LogList = ({
   onToggleExpand,
   patterns,
   virtuosoRef,
-  highlightedIndex
+  highlightedIndex,
+  flash
 }: LogListProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const { range, selectedCount, selectRow, selectRange, extendTo, isSelected } = useLogSelection();
@@ -219,13 +222,13 @@ export const LogList = ({
               return (
                 <div
                   data-log-index={index}
+                  className={cn("relative", isSelected(index) && "bg-primary/10")}
                   onClick={(event) => handleRowClick(event, index)}
                   onMouseDown={(event) => {
                     // Stop the browser extending its text selection, which would
                     // otherwise fight the row range on shift-click.
                     if (event.shiftKey) event.preventDefault();
                   }}
-                  className={cn(isSelected(index) && "bg-primary/10")}
                 >
                   {fileIndices[log.sourceFile] === index && (
                     <div className="bg-muted/50 px-4 py-1.5 font-bold text-xs border-b border-border/50 flex items-center gap-2 sticky top-0 z-10 backdrop-blur-sm shadow-sm">
@@ -323,6 +326,15 @@ export const LogList = ({
                         <LogRow log={log} patterns={patterns} />
                       </div>
                     </div>
+                  )}
+
+                  {/* Keyed by the token so asking for the same row twice plays
+                      the animation again instead of doing nothing. */}
+                  {flash?.index === index && (
+                    <div
+                      key={flash.token}
+                      className="log-row-flash pointer-events-none absolute inset-0 rounded-sm"
+                    />
                   )}
                 </div>
               );

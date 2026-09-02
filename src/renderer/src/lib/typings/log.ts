@@ -31,6 +31,13 @@ export interface IUserLog {
   message: string;
   process?: string;
   source?: string;
+  /**
+   * A subsystem label the code put at the front of the message, as in
+   * `[AI Subscription] user belongs to 4 workspaces`. Worth its own field
+   * because it says which feature a line belongs to, which the file path only
+   * hints at.
+   */
+  tag?: string;
   /** The capture cut this line off; only ever set on the last line of a section. */
   truncated?: boolean;
 }

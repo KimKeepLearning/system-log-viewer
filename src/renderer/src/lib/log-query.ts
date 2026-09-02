@@ -11,9 +11,10 @@ import { IUserLog } from "./typings";
  *   level:error        a field; several values of one field are OR-ed
  *   process:chrome     substring match, so `chrome` finds `chrome[1016:1016]`
  *   section:dmesg
+ *   tag:"AI Subscription"   a subsystem label the code stamped on the line
  *   /pipe.*closed/     regex, for when it is genuinely the right tool
  */
-export const QUERY_FIELDS = ["level", "process", "section", "source", "message"] as const;
+export const QUERY_FIELDS = ["level", "process", "section", "source", "message", "tag"] as const;
 
 export type QueryField = (typeof QUERY_FIELDS)[number] | "text";
 export type TermKind = "substring" | "phrase" | "regex";
@@ -163,6 +164,8 @@ const fieldText = (log: SearchableLog, field: QueryField): string => {
       return log.source ?? "";
     case "message":
       return log.message;
+    case "tag":
+      return log.tag ?? "";
     default:
       return `${log.timestamp ?? ""} ${log.level ?? ""} ${log.process ?? ""} ${log.source ?? ""} ${log.message}`;
   }
@@ -222,7 +225,7 @@ export const highlightPatterns = (parsed: ParsedQuery): RegExp[] => {
   for (const term of parsed.terms) {
     if (term.negated || term.invalid) continue;
     // Level and section have their own columns; highlighting them adds noise.
-    if (term.field === "level" || term.field === "section") continue;
+    if (term.field === "level" || term.field === "section" || term.field === "tag") continue;
     try {
       patterns.push(new RegExp(term.kind === "regex" ? term.value : escapeRegex(term.value), "gi"));
     } catch {

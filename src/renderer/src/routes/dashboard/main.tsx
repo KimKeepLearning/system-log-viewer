@@ -7,19 +7,26 @@ import {
   searchQueryAtom,
   searchMatchesCountAtom,
   currentMatchIndexAtom,
-  logFilesAtom
+  logFilesAtom,
+  clearFiltersAtom
 } from "@renderer/lib/atom";
 import { extractLogSection, parseDeviceInfo } from "@renderer/lib/log-parser";
 import { hierarchyKindOf } from "@renderer/lib/ui-hierarchy";
 import { highlightPatterns, parseQuery } from "@renderer/lib/log-query";
 import { looksLikeHistograms } from "@renderer/lib/log-histograms";
 import { sectionNameOf } from "@renderer/lib/log-domains";
-import { detectBootSessions, lifecycleEvents, timelineEvents } from "@renderer/lib/log-analysis";
+import {
+  captureTime,
+  detectBootSessions,
+  lifecycleEvents,
+  timelineEvents
+} from "@renderer/lib/log-analysis";
 import { runRules } from "@renderer/lib/log-rules";
 import { useRef, useState, useEffect, useCallback, useMemo } from "react";
 import { VirtuosoHandle } from "react-virtuoso";
 import { Clock } from "lucide-react";
 import { cn } from "@renderer/lib/utils";
+import { toast } from "sonner";
 
 import { SearchBar } from "./components/search-bar";
 import { CommandPalette } from "./components/command-palette";
@@ -56,11 +63,14 @@ function RouteComponent() {
   const [hierarchyKey, setHierarchyKey] = useState<string | null>(null);
   // What the log says comes before the log itself, so this is where you land.
   const [view, setView] = useState<"overview" | "log">("overview");
+  const [pendingScrollIndex, setPendingScrollIndex] = useState<number | null>(null);
+  const [flash, setFlash] = useState<{ index: number; token: number } | null>(null);
 
   const [searchQuery] = useAtom(searchQueryAtom);
   const parsedQuery = useMemo(() => parseQuery(searchQuery), [searchQuery]);
   const patterns = useMemo(() => highlightPatterns(parsedQuery), [parsedQuery]);
   const setMatchesCount = useSetAtom(searchMatchesCountAtom);
+  const clearFilters = useSetAtom(clearFiltersAtom);
   const [currentMatchIndex] = useAtom(currentMatchIndexAtom);
   // histograms.txt is a table of distributions, not a log; rendering it in the
   // log list produced one unreadable row of JSON.
@@ -104,7 +114,12 @@ function RouteComponent() {
   // Use Custom Hook for Log Processing
   const { allLogs } = useLogProcessing(selectedFileName, isMergedView, logStructure, parsedLogs);
 
-  const { logs: visibleLogs, processes, levelCounts } = useLogFilter(allLogs, parsedQuery);
+  const {
+    logs: visibleLogs,
+    processes,
+    tags: tagFacets,
+    levelCounts
+  } = useLogFilter(allLogs, parsedQuery);
 
   // Section names for the search bar's section: completion.
   const sectionNames = useMemo(
@@ -114,9 +129,13 @@ function RouteComponent() {
   // Boots and the first occurrence of each consequential finding, marked on
   // the strip so the shape of the session is readable at a glance.
   const events = useMemo(() => {
+    const file = logFiles.find((entry) => entry.name === selectedFileName);
+    const capturedAt = file ? captureTime(extractLogSection(file.content, "LOGDATE")) : null;
     const sessions = detectBootSessions(allLogs);
-    return timelineEvents(sessions, runRules(allLogs), lifecycleEvents(allLogs));
-  }, [allLogs]);
+    return timelineEvents(sessions, runRules(allLogs), lifecycleEvents(allLogs), capturedAt);
+  }, [allLogs, logFiles, selectedFileName]);
+
+  const tagNames = useMemo(() => tagFacets.map((tag) => tag.name), [tagFacets]);
 
   const levelNames = useMemo(
     () => Object.keys(levelCounts).filter((name) => name !== "NONE"),
@@ -137,6 +156,12 @@ function RouteComponent() {
 
   // Use Custom Hook for Search
   const matchIndices = useLogSearch(visibleLogs, parsedQuery);
+
+  useEffect(() => {
+    if (pendingScrollIndex === null || view !== "log") return;
+    virtuosoRef.current?.scrollToIndex({ index: pendingScrollIndex, align: "center" });
+    setPendingScrollIndex(null);
+  }, [pendingScrollIndex, view]);
 
   // Handle pending scroll after view update
   useEffect(() => {
@@ -220,6 +245,7 @@ function RouteComponent() {
         selectedFileName={selectedFileName}
         activeFile={activeFile}
         deviceInfo={deviceInfo}
+        tags={tagFacets}
         onSelectFile={setSelectedFileName}
         onScrollToSection={scrollToSection}
       />
@@ -265,12 +291,30 @@ function RouteComponent() {
               </div>
 
               {view === "log" && (
+                <button
+                  type="button"
+                  onClick={() => setIsMergedView(!isMergedView)}
+                  className={cn(
+                    "h-6 px-2 rounded-md text-xs font-medium inline-flex items-center gap-1.5 transition-colors border shrink-0",
+                    isMergedView
+                      ? "border-primary/60 bg-primary/10 text-primary"
+                      : "border-transparent bg-muted/40 text-muted-foreground hover:bg-muted"
+                  )}
+                  title="Interleave every section on one timeline"
+                >
+                  <Clock className="size-3" />
+                  Merge
+                </button>
+              )}
+
+              {view === "log" && (
                 <SearchBar
                   parsed={parsedQuery}
                   matchCount={matchIndices.length}
                   processes={processes}
                   sections={sectionNames}
                   levels={levelNames}
+                  tags={tagNames}
                   inputRef={searchInputRef}
                 />
               )}
@@ -281,14 +325,20 @@ function RouteComponent() {
                 logs={allLogs}
                 fileName={selectedFileName}
                 onJumpToLog={(log) => {
-                  const index = visibleLogs.indexOf(log);
                   setView("log");
+                  const index = visibleLogs.indexOf(log);
                   if (index >= 0) {
-                    // The list has to exist before it can be scrolled.
-                    window.setTimeout(
-                      () => virtuosoRef.current?.scrollToIndex({ index, align: "center" }),
-                      0
-                    );
+                    // Handed to an effect rather than a timeout: the list is
+                    // still unmounted at this point, so there is nothing to
+                    // scroll yet and virtuosoRef is null.
+                    setPendingScrollIndex(index);
+                    setFlash({ index, token: Date.now() });
+                  } else {
+                    // The evidence exists but the active filters hide it, which
+                    // would otherwise look like the jump silently doing nothing.
+                    toast.info("That line is hidden by the current filters", {
+                      action: { label: "Clear filters", onClick: () => clearFilters() }
+                    });
                   }
                 }}
               />
@@ -301,6 +351,7 @@ function RouteComponent() {
                     processes={processes}
                     sections={sectionNames}
                     levels={levelNames}
+                    tags={tagNames}
                     inputRef={searchInputRef}
                   />
                 </div>
@@ -318,22 +369,9 @@ function RouteComponent() {
 
                 <TimelineStrip logs={allLogs} events={events} />
 
+                {/* Filters only: Merge is a view mode and sits with the view
+                    switch, so this line never has to wrap. */}
                 <div className="px-2 py-1.5 border-b bg-background shrink-0 flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setIsMergedView(!isMergedView)}
-                    className={cn(
-                      "h-6 px-2 rounded-md text-xs font-medium inline-flex items-center gap-1.5 transition-colors border shrink-0",
-                      isMergedView
-                        ? "border-primary/60 bg-primary/10 text-primary"
-                        : "border-transparent bg-muted/40 text-muted-foreground hover:bg-muted"
-                    )}
-                    title="Interleave every section on one timeline"
-                  >
-                    <Clock className="size-3" />
-                    Merge
-                  </button>
-
                   <FilterBar
                     levelCounts={levelCounts}
                     processes={processes}
@@ -353,6 +391,7 @@ function RouteComponent() {
                   patterns={patterns}
                   virtuosoRef={virtuosoRef}
                   highlightedIndex={activeMatchLogIndex}
+                  flash={flash}
                 />
 
                 <SearchResultsPanel
