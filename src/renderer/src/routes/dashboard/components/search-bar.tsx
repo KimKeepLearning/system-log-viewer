@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
-import { useAtom, useAtomValue } from "jotai";
-import { ArrowDown, ArrowUp, HelpCircle, Search, X } from "lucide-react";
+import { useAtom } from "jotai";
+import { ArrowDown, ArrowUp, HelpCircle, ListFilter, Search, X } from "lucide-react";
 import { cn } from "@renderer/lib/utils";
 import { Input } from "@renderer/components/ui/input";
 import { Button } from "@renderer/components/ui/button";
@@ -54,7 +54,7 @@ export const SearchBar = ({
 }: SearchBarProps) => {
   const [query, setQuery] = useAtom(searchQueryAtom);
   const [currentMatch, setCurrentMatch] = useAtom(currentMatchIndexAtom);
-  const searchMode = useAtomValue(searchModeAtom);
+  const [searchMode, setSearchMode] = useAtom(searchModeAtom);
   const localRef = useRef<HTMLInputElement>(null);
   const inputRef = externalRef ?? localRef;
   const [isFocused, setIsFocused] = useState(false);
@@ -221,7 +221,27 @@ export const SearchBar = ({
         )
       )}
 
-      <div className="flex">
+      {/* Filter or step: the two ways a query can be applied, so the switch
+          belongs with the query rather than among the filters. */}
+      <Button
+        variant="ghost"
+        size="sm"
+        className={cn(
+          "h-6 px-2 text-xs gap-1 shrink-0",
+          searchMode === "filter" && "bg-primary/10 text-primary"
+        )}
+        onClick={() => setSearchMode(searchMode === "filter" ? "highlight" : "filter")}
+        title={
+          searchMode === "filter"
+            ? "Showing only matches — click to step through them instead"
+            : "Stepping through matches — click to show only them"
+        }
+      >
+        <ListFilter className="size-3" />
+        {searchMode === "filter" ? "Only matches" : "Step"}
+      </Button>
+
+      <div className="flex shrink-0">
         <Button
           variant="ghost"
           size="sm"

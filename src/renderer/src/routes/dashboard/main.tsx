@@ -289,6 +289,23 @@ function RouteComponent() {
               </div>
 
               {view === "log" && (
+                <button
+                  type="button"
+                  onClick={() => setIsMergedView(!isMergedView)}
+                  className={cn(
+                    "h-6 px-2 rounded-md text-xs font-medium inline-flex items-center gap-1.5 transition-colors border shrink-0",
+                    isMergedView
+                      ? "border-primary/60 bg-primary/10 text-primary"
+                      : "border-transparent bg-muted/40 text-muted-foreground hover:bg-muted"
+                  )}
+                  title="Interleave every section on one timeline"
+                >
+                  <Clock className="size-3" />
+                  Merge
+                </button>
+              )}
+
+              {view === "log" && (
                 <SearchBar
                   parsed={parsedQuery}
                   matchCount={matchIndices.length}
@@ -349,22 +366,9 @@ function RouteComponent() {
 
                 <TimelineStrip logs={allLogs} events={events} />
 
+                {/* Filters only: Merge is a view mode and sits with the view
+                    switch, so this line never has to wrap. */}
                 <div className="px-2 py-1.5 border-b bg-background shrink-0 flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setIsMergedView(!isMergedView)}
-                    className={cn(
-                      "h-6 px-2 rounded-md text-xs font-medium inline-flex items-center gap-1.5 transition-colors border shrink-0",
-                      isMergedView
-                        ? "border-primary/60 bg-primary/10 text-primary"
-                        : "border-transparent bg-muted/40 text-muted-foreground hover:bg-muted"
-                    )}
-                    title="Interleave every section on one timeline"
-                  >
-                    <Clock className="size-3" />
-                    Merge
-                  </button>
-
                   <FilterBar
                     levelCounts={levelCounts}
                     processes={processes}
