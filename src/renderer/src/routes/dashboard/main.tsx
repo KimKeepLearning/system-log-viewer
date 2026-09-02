@@ -64,6 +64,7 @@ function RouteComponent() {
   // What the log says comes before the log itself, so this is where you land.
   const [view, setView] = useState<"overview" | "log">("overview");
   const [pendingScrollIndex, setPendingScrollIndex] = useState<number | null>(null);
+  const [flash, setFlash] = useState<{ index: number; token: number } | null>(null);
 
   const [searchQuery] = useAtom(searchQueryAtom);
   const parsedQuery = useMemo(() => parseQuery(searchQuery), [searchQuery]);
@@ -331,6 +332,7 @@ function RouteComponent() {
                     // still unmounted at this point, so there is nothing to
                     // scroll yet and virtuosoRef is null.
                     setPendingScrollIndex(index);
+                    setFlash({ index, token: Date.now() });
                   } else {
                     // The evidence exists but the active filters hide it, which
                     // would otherwise look like the jump silently doing nothing.
@@ -389,6 +391,7 @@ function RouteComponent() {
                   patterns={patterns}
                   virtuosoRef={virtuosoRef}
                   highlightedIndex={activeMatchLogIndex}
+                  flash={flash}
                 />
 
                 <SearchResultsPanel

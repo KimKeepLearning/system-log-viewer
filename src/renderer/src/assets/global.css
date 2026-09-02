@@ -140,3 +140,19 @@
 .scrollbar-container::-webkit-scrollbar-track {
   background-color: transparent;
 }
+
+/* Following a finding scrolls the list, but a row that simply appears mid-screen
+   gives no sign of which one was asked for. This marks it and gets out of the
+   way, rather than leaving a highlight to be dismissed. */
+@keyframes log-row-flash {
+  0% {
+    background-color: color-mix(in oklab, var(--primary) 28%, transparent);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.log-row-flash {
+  animation: log-row-flash 1.4s ease-out forwards;
+}
