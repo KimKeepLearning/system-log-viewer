@@ -113,7 +113,12 @@ function RouteComponent() {
   // Use Custom Hook for Log Processing
   const { allLogs } = useLogProcessing(selectedFileName, isMergedView, logStructure, parsedLogs);
 
-  const { logs: visibleLogs, processes, levelCounts } = useLogFilter(allLogs, parsedQuery);
+  const {
+    logs: visibleLogs,
+    processes,
+    tags: tagFacets,
+    levelCounts
+  } = useLogFilter(allLogs, parsedQuery);
 
   // Section names for the search bar's section: completion.
   const sectionNames = useMemo(
@@ -129,11 +134,7 @@ function RouteComponent() {
     return timelineEvents(sessions, runRules(allLogs), lifecycleEvents(allLogs), capturedAt);
   }, [allLogs, logFiles, selectedFileName]);
 
-  const tagNames = useMemo(() => {
-    const seen = new Set<string>();
-    for (const log of allLogs) if (log.tag) seen.add(log.tag);
-    return [...seen].sort();
-  }, [allLogs]);
+  const tagNames = useMemo(() => tagFacets.map((tag) => tag.name), [tagFacets]);
 
   const levelNames = useMemo(
     () => Object.keys(levelCounts).filter((name) => name !== "NONE"),
@@ -367,6 +368,7 @@ function RouteComponent() {
                   <FilterBar
                     levelCounts={levelCounts}
                     processes={processes}
+                    tags={tagFacets}
                     visibleCount={visibleLogs.length}
                     totalCount={allLogs.length}
                   />

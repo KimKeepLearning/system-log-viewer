@@ -3,6 +3,7 @@ import { useAtomValue } from "jotai";
 import {
   levelFilterAtom,
   processFilterAtom,
+  tagFilterAtom,
   sectionFilterAtom,
   searchModeAtom,
   timeRangeAtom
@@ -16,6 +17,8 @@ export interface FilterResult {
   hiddenCount: number;
   /** Every process seen in the unfiltered set, most talkative first. */
   processes: { name: string; count: number }[];
+  /** Subsystem labels present, most frequent first. */
+  tags: { name: string; count: number }[];
   levelCounts: Record<string, number>;
 }
 
@@ -27,6 +30,7 @@ export interface FilterResult {
 export const useLogFilter = (allLogs: ExtendedLog[], parsed: ParsedQuery): FilterResult => {
   const levels = useAtomValue(levelFilterAtom);
   const processes = useAtomValue(processFilterAtom);
+  const tags = useAtomValue(tagFilterAtom);
   const sections = useAtomValue(sectionFilterAtom);
   const mode = useAtomValue(searchModeAtom);
   const timeRange = useAtomValue(timeRangeAtom);
@@ -35,17 +39,22 @@ export const useLogFilter = (allLogs: ExtendedLog[], parsed: ParsedQuery): Filte
   // soon as one of them is picked.
   const facets = useMemo(() => {
     const processCounts = new Map<string, number>();
+    const tagCounts = new Map<string, number>();
     const levelCounts: Record<string, number> = {};
 
     for (const log of allLogs) {
       const level = log.level || "NONE";
       levelCounts[level] = (levelCounts[level] ?? 0) + 1;
       if (log.process) processCounts.set(log.process, (processCounts.get(log.process) ?? 0) + 1);
+      if (log.tag) tagCounts.set(log.tag, (tagCounts.get(log.tag) ?? 0) + 1);
     }
 
     return {
       levelCounts,
       processes: [...processCounts.entries()]
+        .map(([name, count]) => ({ name, count }))
+        .sort((a, b) => b.count - a.count),
+      tags: [...tagCounts.entries()]
         .map(([name, count]) => ({ name, count }))
         .sort((a, b) => b.count - a.count)
     };
@@ -56,6 +65,7 @@ export const useLogFilter = (allLogs: ExtendedLog[], parsed: ParsedQuery): Filte
     if (
       levels.size === 0 &&
       processes.size === 0 &&
+      tags.size === 0 &&
       sections.size === 0 &&
       timeRange === null &&
       !filterBySearch
@@ -68,6 +78,7 @@ export const useLogFilter = (allLogs: ExtendedLog[], parsed: ParsedQuery): Filte
     return allLogs.filter((log) => {
       if (levels.size > 0 && !levels.has(log.level as never)) return false;
       if (processes.size > 0 && (!log.process || !processes.has(log.process))) return false;
+      if (tags.size > 0 && (!log.tag || !tags.has(log.tag))) return false;
       if (sections.size > 0 && !sections.has(log.sourceFile)) return false;
       if (timeRange) {
         // Lines with no time cannot be placed in a window, so a time filter
@@ -79,12 +90,13 @@ export const useLogFilter = (allLogs: ExtendedLog[], parsed: ParsedQuery): Filte
       if (matches && !matches(log)) return false;
       return true;
     });
-  }, [allLogs, levels, processes, sections, timeRange, parsed, mode]);
+  }, [allLogs, levels, processes, tags, sections, timeRange, parsed, mode]);
 
   return {
     logs,
     hiddenCount: allLogs.length - logs.length,
     processes: facets.processes,
+    tags: facets.tags,
     levelCounts: facets.levelCounts
   };
 };

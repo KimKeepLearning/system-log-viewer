@@ -12,6 +12,7 @@ import {
   levelFilterAtom,
   LogLevelName,
   processFilterAtom,
+  tagFilterAtom,
   searchModeAtom
 } from "@renderer/lib/atom";
 import { useState } from "react";
@@ -53,16 +54,27 @@ const toggle = <T,>(set: Set<T>, value: T): Set<T> => {
 const compact = (value: number): string =>
   value >= 1000 ? `${(value / 1000).toFixed(value >= 10000 ? 0 : 1)}k` : String(value);
 
+// Beyond this many, chips stop being scannable and the rest go behind a menu.
+const INLINE_TAGS = 8;
+
 interface FilterBarProps {
   levelCounts: Record<string, number>;
   processes: { name: string; count: number }[];
+  tags: { name: string; count: number }[];
   visibleCount: number;
   totalCount: number;
 }
 
-export const FilterBar = ({ levelCounts, processes, visibleCount, totalCount }: FilterBarProps) => {
+export const FilterBar = ({
+  levelCounts,
+  processes,
+  tags,
+  visibleCount,
+  totalCount
+}: FilterBarProps) => {
   const [levels, setLevels] = useAtom(levelFilterAtom);
   const [processFilter, setProcessFilter] = useAtom(processFilterAtom);
+  const [tagFilter, setTagFilter] = useAtom(tagFilterAtom);
   const [searchMode, setSearchMode] = useAtom(searchModeAtom);
   const hasFilters = useAtomValue(hasActiveFiltersAtom);
   const clearFilters = useSetAtom(clearFiltersAtom);
@@ -158,6 +170,64 @@ export const FilterBar = ({ levelCounts, processes, visibleCount, totalCount }: 
           </ScrollArea>
         </PopoverContent>
       </Popover>
+
+      {tags.length > 0 && (
+        <>
+          <div className="h-4 w-px bg-border mx-0.5" />
+          {tags.slice(0, INLINE_TAGS).map((tag) => {
+            const isOn = tagFilter.has(tag.name);
+            return (
+              <button
+                key={tag.name}
+                type="button"
+                onClick={() => setTagFilter(toggle(tagFilter, tag.name))}
+                className={cn(
+                  "h-6 px-2 rounded-md border text-xs font-medium inline-flex items-center gap-1.5 transition-colors",
+                  // Same colour the tag wears on the log rows, so the chip and
+                  // the thing it selects read as one.
+                  isOn
+                    ? "border-primary/60 bg-primary/15 text-primary"
+                    : "border-transparent bg-primary/8 text-primary/80 hover:bg-primary/15"
+                )}
+                title={`${tag.count.toLocaleString()} lines tagged ${tag.name}`}
+              >
+                {tag.name}
+                <span className="tabular-nums opacity-60">{compact(tag.count)}</span>
+              </button>
+            );
+          })}
+
+          {tags.length > INLINE_TAGS && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-6 px-2 text-xs">
+                  +{tags.length - INLINE_TAGS}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="start" className="w-64 p-1">
+                <ScrollArea className="h-56">
+                  {tags.slice(INLINE_TAGS).map((tag) => (
+                    <button
+                      key={tag.name}
+                      type="button"
+                      onClick={() => setTagFilter(toggle(tagFilter, tag.name))}
+                      className="w-full flex items-center gap-2 px-2 py-1 rounded text-xs hover:bg-muted text-left"
+                    >
+                      <Check
+                        className={cn("size-3 shrink-0", !tagFilter.has(tag.name) && "opacity-0")}
+                      />
+                      <span className="truncate flex-1 min-w-0">{tag.name}</span>
+                      <span className="tabular-nums text-muted-foreground">
+                        {compact(tag.count)}
+                      </span>
+                    </button>
+                  ))}
+                </ScrollArea>
+              </PopoverContent>
+            </Popover>
+          )}
+        </>
+      )}
 
       {/* Whether a search narrows the list or just walks matches in place. */}
       <Button
