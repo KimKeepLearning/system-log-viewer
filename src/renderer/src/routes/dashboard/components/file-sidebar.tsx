@@ -1,10 +1,10 @@
 import { useMemo, useState } from "react";
 import { useAtom, useAtomValue } from "jotai";
-import { ChevronDown, ChevronRight, Search, X } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Search, X } from "lucide-react";
 import { cn } from "@renderer/lib/utils";
 import { Input } from "@renderer/components/ui/input";
 import { ScrollArea } from "@renderer/components/ui/scroll-area";
-import { sectionFilterAtom, sectionStatsAtom } from "@renderer/lib/atom";
+import { sectionFilterAtom, sectionStatsAtom, tagFilterAtom } from "@renderer/lib/atom";
 import {
   classifySection,
   LOG_DOMAINS,
@@ -20,6 +20,8 @@ interface FileSidebarProps {
   selectedFileName: string | null;
   activeFile: string | null;
   deviceInfo: { board?: string; version?: string; arcStatus?: string };
+  /** Subsystem labels present in the open file, most frequent first. */
+  tags: { name: string; count: number }[];
   onSelectFile: (fileName: string) => void;
   onScrollToSection: (key: string) => void;
 }
@@ -110,11 +112,14 @@ export const FileSidebar = ({
   selectedFileName,
   activeFile,
   deviceInfo,
+  tags,
   onSelectFile,
   onScrollToSection
 }: FileSidebarProps) => {
   const stats = useAtomValue(sectionStatsAtom);
   const [sectionFilter, setSectionFilter] = useAtom(sectionFilterAtom);
+  const [tagFilter, setTagFilter] = useAtom(tagFilterAtom);
+  const [tagsCollapsed, setTagsCollapsed] = useState(false);
   const [query, setQuery] = useState("");
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [hideEmpty, setHideEmpty] = useState(false);
@@ -233,6 +238,62 @@ export const FileSidebar = ({
 
       <ScrollArea className="flex-1 min-h-0 scrollbar-container">
         <div className="p-1.5 flex flex-col gap-1">
+          {tags.length > 0 && (
+            <div>
+              <button
+                type="button"
+                onClick={() => setTagsCollapsed(!tagsCollapsed)}
+                className="w-full flex items-center gap-1 px-1 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {tagsCollapsed ? (
+                  <ChevronRight className="size-3" />
+                ) : (
+                  <ChevronDown className="size-3" />
+                )}
+                <span className="flex-1 text-left">Tags</span>
+                {tagFilter.size > 0 && (
+                  <span className="text-primary tabular-nums normal-case">{tagFilter.size}</span>
+                )}
+                <span className="tabular-nums opacity-60 normal-case">{tags.length}</span>
+              </button>
+
+              {!tagsCollapsed && (
+                <div className="flex flex-col">
+                  {tags.map((tag) => {
+                    const isOn = tagFilter.has(tag.name);
+                    return (
+                      <button
+                        key={tag.name}
+                        type="button"
+                        onClick={() => {
+                          const next = new Set(tagFilter);
+                          if (next.has(tag.name)) next.delete(tag.name);
+                          else next.add(tag.name);
+                          setTagFilter(next);
+                        }}
+                        className={cn(
+                          "flex items-center gap-1.5 rounded px-1.5 py-1 text-left transition-colors",
+                          isOn ? "bg-primary/10 text-primary" : "hover:bg-muted/60"
+                        )}
+                        title={`${tag.count.toLocaleString()} lines tagged ${tag.name}`}
+                      >
+                        <Check className={cn("size-3 shrink-0", !isOn && "opacity-0")} />
+                        <span
+                          className={cn("text-xs truncate flex-1 min-w-0", isOn && "font-medium")}
+                        >
+                          {tag.name}
+                        </span>
+                        <span className="text-[10px] tabular-nums text-muted-foreground/60 shrink-0">
+                          {compact(tag.count)}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
           {grouped.length === 0 && (
             <p className="text-xs text-muted-foreground text-center py-6">No section matches.</p>
           )}

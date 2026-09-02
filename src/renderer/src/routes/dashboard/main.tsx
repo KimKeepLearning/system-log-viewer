@@ -244,6 +244,7 @@ function RouteComponent() {
         selectedFileName={selectedFileName}
         activeFile={activeFile}
         deviceInfo={deviceInfo}
+        tags={tagFacets}
         onSelectFile={setSelectedFileName}
         onScrollToSection={scrollToSection}
       />
@@ -372,7 +373,6 @@ function RouteComponent() {
                   <FilterBar
                     levelCounts={levelCounts}
                     processes={processes}
-                    tags={tagFacets}
                     visibleCount={visibleLogs.length}
                     totalCount={allLogs.length}
                   />
