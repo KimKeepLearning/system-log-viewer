@@ -83,7 +83,8 @@ const parseStandardLogLine = (line: string): IUserLog | null => {
   // `[AI Subscription] ...`. Words and spaces only, and no slash: that keeps
   // paths, `[0831/061736]` sampler stamps and bare `[dbus/o` truncations out.
   let tag: string | undefined;
-  const tagMatch = message.match(/^\[([A-Za-z][A-Za-z0-9 _.-]{1,30})\]\s+(.*)$/);
+  const tagMatch = message.match(/^"?\[([A-Za-z][A-Za-z0-9 _.-]{1,30})\]\s+(.*)$/);
+  console.log("tag match", tagMatch, message);
   if (tagMatch) {
     tag = tagMatch[1];
     message = tagMatch[2];
