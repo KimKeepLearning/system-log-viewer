@@ -64,6 +64,7 @@ function RouteComponent() {
   // What the log says comes before the log itself, so this is where you land.
   const [view, setView] = useState<"overview" | "log">("overview");
   const [pendingScrollIndex, setPendingScrollIndex] = useState<number | null>(null);
+  const [pendingTag, setPendingTag] = useState<string | null>(null);
   const [flash, setFlash] = useState<{ index: number; token: number } | null>(null);
 
   const [searchQuery] = useAtom(searchQueryAtom);
@@ -200,6 +201,24 @@ function RouteComponent() {
     [selectedFileName, fileIndices]
   );
 
+  // Picking a tag in the sidebar filtered the list but left you wherever you
+  // were, which on a long file looked like nothing had happened.
+  const focusTag = useCallback((tag: string) => {
+    setHierarchyKey(null);
+    setView("log");
+    setPendingTag(tag);
+  }, []);
+
+  useEffect(() => {
+    if (pendingTag === null || view !== "log") return;
+    const index = visibleLogs.findIndex((log) => log.tag === pendingTag);
+    if (index >= 0) {
+      virtuosoRef.current?.scrollToIndex({ index, align: "start" });
+      setFlash({ index, token: Date.now() });
+    }
+    setPendingTag(null);
+  }, [pendingTag, view, visibleLogs]);
+
   const toggleExpand = useCallback((id: string) => {
     setExpandedIds((prev) => {
       const next = new Set(prev);
@@ -248,6 +267,7 @@ function RouteComponent() {
         tags={tagFacets}
         onSelectFile={setSelectedFileName}
         onScrollToSection={scrollToSection}
+        onFocusTag={focusTag}
       />
 
       {/* Main Content */}

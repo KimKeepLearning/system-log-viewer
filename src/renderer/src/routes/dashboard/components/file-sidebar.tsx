@@ -24,6 +24,8 @@ interface FileSidebarProps {
   tags: { name: string; count: number }[];
   onSelectFile: (fileName: string) => void;
   onScrollToSection: (key: string) => void;
+  /** Turning a tag on also takes you to its first line, not just filters. */
+  onFocusTag: (tag: string) => void;
 }
 
 interface SectionEntry {
@@ -114,7 +116,8 @@ export const FileSidebar = ({
   deviceInfo,
   tags,
   onSelectFile,
-  onScrollToSection
+  onScrollToSection,
+  onFocusTag
 }: FileSidebarProps) => {
   const stats = useAtomValue(sectionStatsAtom);
   const [sectionFilter, setSectionFilter] = useAtom(sectionFilterAtom);
@@ -267,8 +270,12 @@ export const FileSidebar = ({
                         type="button"
                         onClick={() => {
                           const next = new Set(tagFilter);
-                          if (next.has(tag.name)) next.delete(tag.name);
-                          else next.add(tag.name);
+                          if (next.has(tag.name)) {
+                            next.delete(tag.name);
+                          } else {
+                            next.add(tag.name);
+                            onFocusTag(tag.name);
+                          }
                           setTagFilter(next);
                         }}
                         className={cn(
