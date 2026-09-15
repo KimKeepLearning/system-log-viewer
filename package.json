@@ -9,6 +9,8 @@
   "scripts": {
     "format": "prettier --write .",
     "lint": "eslint --cache .",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
@@ -95,6 +97,7 @@
     "@types/react-dom": "^19.0.4",
     "@types/react-virtualized-auto-sizer": "^1.0.8",
     "@types/react-window": "^2.0.0",
+    "@types/ssh2": "^1.15.6",
     "@vibeus/ui": "^1.5.4",
     "@vitejs/plugin-react": "^4.3.4",
     "class-variance-authority": "^0.7.1",
@@ -130,6 +133,7 @@
     "vaul": "^1.1.2",
     "vite": "^6.2.3",
     "vite-plugin-svgr": "^4.5.0",
+    "vitest": "^3.2.7",
     "zod": "^3.24.2"
   },
   "repository": {

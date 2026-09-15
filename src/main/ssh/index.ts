@@ -1,63 +1,42 @@
 import { ipcMain } from "electron";
-import { Client, ConnectConfig } from "ssh2";
-import * as fs from "fs";
+import {
+  collect,
+  disconnect,
+  execCommand,
+  readRemoteFile,
+  startFollow,
+  stopFollow,
+  SSHTarget
+} from "./client";
 
-export const registerSSHHandlers = () => {
-  ipcMain.handle(
-    "ssh:read-file",
-    async (_, config: ConnectConfig & { privateKeyPath?: string }, filePath: string) => {
-      return new Promise((resolve, reject) => {
-        const conn = new Client();
+export type { ExecResult, FollowStatus, SSHTarget } from "./client";
 
-        conn.on("ready", () => {
-          conn.sftp((err, sftp) => {
-            if (err) {
-              conn.end();
-              return reject(err);
-            }
-
-            const stream = sftp.createReadStream(filePath);
-            let data = "";
-
-            stream.on("data", (chunk) => {
-              data += chunk.toString();
-            });
-
-            stream.on("end", () => {
-              conn.end();
-              resolve(data);
-            });
-
-            stream.on("error", (err) => {
-              conn.end();
-              reject(err);
-            });
-          });
-        });
-
-        conn.on("error", (err) => {
-          console.error("SSH Client Error:", err);
-          reject(err);
-        });
-
-        conn.on(
-          "keyboard-interactive",
-          (_name, _instructions, _instructionsLang, prompts, finish) => {
-            finish(prompts.map(() => config.password || ""));
-          }
-        );
-
-        try {
-          const connectConfig: ConnectConfig = { ...config, tryKeyboard: true };
-          if (config.privateKeyPath) {
-            connectConfig.privateKey = fs.readFileSync(config.privateKeyPath);
-          }
-          conn.connect(connectConfig);
-        } catch (e) {
-          console.error("SSH Connect Error:", e);
-          reject(e);
-        }
-      });
-    }
+export const registerSSHHandlers = (): void => {
+  ipcMain.handle("ssh:read-file", (_event, target: SSHTarget, filePath: string) =>
+    readRemoteFile(target, filePath)
   );
+
+  ipcMain.handle("ssh:exec", (_event, target: SSHTarget, command: string) =>
+    execCommand(target, command)
+  );
+
+  ipcMain.handle("ssh:collect", (_event, target: SSHTarget, command: string, remotePath: string) =>
+    collect(target, command, remotePath)
+  );
+
+  ipcMain.handle("ssh:follow-start", (event, id: string, target: SSHTarget, command: string) => {
+    const send = (channel: string, payload: unknown) => {
+      if (!event.sender.isDestroyed()) event.sender.send(channel, payload);
+    };
+
+    startFollow(id, target, command, {
+      onData: (chunk) => send("ssh:follow-data", { id, chunk }),
+      onStatus: (status) => send("ssh:follow-status", status)
+    });
+    return id;
+  });
+
+  ipcMain.handle("ssh:follow-stop", (_event, id: string) => stopFollow(id));
+
+  ipcMain.handle("ssh:disconnect", (_event, target: SSHTarget) => disconnect(target));
 };

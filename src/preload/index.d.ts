@@ -15,12 +15,57 @@ declare global {
     imageDataUrl?: string;
   }
 
+  /** Mirrors SSHTarget in src/main/ssh/index.ts, for the same reason. */
+  interface SSHTarget {
+    host: string;
+    port: number;
+    username: string;
+    password?: string;
+    privateKeyPath?: string;
+  }
+
+  interface SSHExecResult {
+    code: number | null;
+    stdout: string;
+    stderr: string;
+  }
+
+  type SSHFollowState =
+    | "connecting"
+    | "reconnecting"
+    | "streaming"
+    | "waiting"
+    | "error"
+    | "gave-up"
+    | "stopped";
+
+  interface SSHFollowStatus {
+    id: string;
+    state: SSHFollowState;
+    attempt: number;
+    /** Milliseconds until the next attempt, while waiting. */
+    delay?: number;
+    message?: string;
+  }
+
   interface Window {
     electron: ElectronAPI;
     api: {
       getPathForFile: (file: File) => string;
       readLogFile: (filePath: string) => Promise<ExtractedLogFile[]>;
-      readRemoteFile: (config: any, filePath: string) => Promise<string>;
+      ssh: {
+        readFile: (target: SSHTarget, filePath: string) => Promise<string>;
+        exec: (target: SSHTarget, command: string) => Promise<SSHExecResult>;
+        collect: (target: SSHTarget, command: string, remotePath: string) => Promise<string>;
+        disconnect: (target: SSHTarget) => Promise<void>;
+        follow: (
+          id: string,
+          target: SSHTarget,
+          command: string,
+          onData: (chunk: string) => void,
+          onStatus: (status: SSHFollowStatus) => void
+        ) => () => void;
+      };
     };
   }
 }
