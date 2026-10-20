@@ -66,7 +66,7 @@ export function FileDropZone({ onFileSelect, accept, multiple = false }: FileDro
   return (
     <Card
       className={cn(
-        "w-full h-64 border-dashed border-2 flex flex-col items-center justify-center cursor-pointer transition-colors m-4 hover:bg-muted/50",
+        "w-full h-48 min-h-28 border-dashed border-2 flex flex-col items-center justify-center cursor-pointer transition-colors hover:bg-muted/50",
         isDragging ? "border-primary bg-primary/10" : "border-muted-foreground/25"
       )}
       onDragOver={handleDragOver}

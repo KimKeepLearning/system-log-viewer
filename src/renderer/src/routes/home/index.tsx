@@ -107,7 +107,7 @@ function RouteComponent() {
   return (
     <Providers>
       <div className="w-screen h-screen flex flex-col items-center justify-center p-8 bg-background text-foreground">
-        <div className="max-w-2xl w-full flex flex-col gap-6">
+        <div className="max-w-2xl w-full max-h-full min-h-0 flex flex-col gap-6">
           <div className="space-y-2 text-center">
             <h1 className="text-3xl font-bold tracking-tight">System Log Viewer</h1>
             <p className="text-muted-foreground">Upload and view system logs</p>
@@ -124,34 +124,36 @@ function RouteComponent() {
           </div>
 
           {recent.length > 0 && !loading && (
-            <div className="flex flex-col gap-1">
+            <div className="min-h-0 flex flex-col gap-1">
               <div className="text-xs font-medium text-muted-foreground">Recent</div>
-              {recent.map((entry) => (
-                <div
-                  key={entry.path}
-                  className="group flex items-center gap-2 rounded px-2 py-1 hover:bg-muted transition-colors"
-                >
-                  <button
-                    type="button"
-                    className="flex-1 min-w-0 text-left text-sm truncate"
-                    title={entry.path}
-                    onClick={() => handleReopen(entry.path)}
+              <div className="min-h-14 overflow-y-auto grid grid-cols-2 gap-x-4 gap-y-1">
+                {recent.map((entry) => (
+                  <div
+                    key={entry.path}
+                    className="group flex items-center gap-2 rounded px-2 py-1 hover:bg-muted transition-colors"
                   >
-                    {entry.name}
-                  </button>
-                  <button
-                    type="button"
-                    className="text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
-                    title="Forget this file"
-                    onClick={() => {
-                      forgetFile(entry.path);
-                      setRecent(recentFiles());
-                    }}
-                  >
-                    <X className="size-3.5" />
-                  </button>
-                </div>
-              ))}
+                    <button
+                      type="button"
+                      className="flex-1 min-w-0 text-left text-sm truncate"
+                      title={entry.path}
+                      onClick={() => handleReopen(entry.path)}
+                    >
+                      {entry.name}
+                    </button>
+                    <button
+                      type="button"
+                      className="text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="Forget this file"
+                      onClick={() => {
+                        forgetFile(entry.path);
+                        setRecent(recentFiles());
+                      }}
+                    >
+                      <X className="size-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
