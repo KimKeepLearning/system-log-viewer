@@ -43,6 +43,8 @@ import { FilterBar } from "./components/filter-bar";
 import { TimelineStrip } from "./components/timeline-strip";
 import { SearchResultsPanel } from "./components/search-results-panel";
 import { LogList } from "./components/log-list";
+import { CompareView } from "./components/compare-view";
+import type { Evidence } from "@renderer/lib/log-diff";
 import { ExtendedLog } from "./types";
 
 export const Route = createFileRoute("/dashboard/main")({
@@ -65,10 +67,14 @@ function RouteComponent() {
   const [isResultsOpen, setIsResultsOpen] = useState(false);
   const [hierarchyKey, setHierarchyKey] = useState<string | null>(null);
   // What the log says comes before the log itself, so this is where you land.
-  const [view, setView] = useState<"overview" | "log">("overview");
+  const [view, setView] = useState<"overview" | "log" | "compare">("overview");
   const [pendingScrollIndex, setPendingScrollIndex] = useState<number | null>(null);
   const [pendingTag, setPendingTag] = useState<string | null>(null);
   const [pendingLog, setPendingLog] = useState<ExtendedLog | null>(null);
+  const [pendingTarget, setPendingTarget] = useState<{
+    sourceFile: string;
+    matches: (log: ExtendedLog) => boolean;
+  } | null>(null);
   const [flash, setFlash] = useState<{ index: number; token: number } | null>(null);
 
   const [searchQuery] = useAtom(searchQueryAtom);
@@ -277,6 +283,43 @@ function RouteComponent() {
     setPendingLog(null);
   }, [pendingLog, visibleLogs, allLogs]);
 
+  const jumpTo = useCallback(
+    (sourceFile: string, matches: (log: ExtendedLog) => boolean) => {
+      setHierarchyKey(null);
+      setView("log");
+      const fileName = sourceFile.split("::")[0];
+      if (!isMergedView && fileName !== selectedFileName) setSelectedFileName(fileName);
+      setPendingTarget({ sourceFile, matches });
+    },
+    [isMergedView, selectedFileName]
+  );
+
+  // The comparison was built from the raw sections, not these rows, so the line
+  // is found again by section and text rather than by identity.
+  const jumpToEvidence = useCallback(
+    (evidence: Evidence) =>
+      jumpTo(
+        evidence.sourceFile,
+        (log) => log.sourceFile === evidence.sourceFile && log.message === evidence.message
+      ),
+    [jumpTo]
+  );
+
+  useEffect(() => {
+    if (pendingTarget === null || view !== "log") return;
+    if (!isMergedView && pendingTarget.sourceFile.split("::")[0] !== selectedFileName) return;
+    const index = visibleLogs.findIndex(pendingTarget.matches);
+    if (index >= 0) {
+      virtuosoRef.current?.scrollToIndex({ index, align: "center" });
+      setFlash({ index, token: Date.now() });
+    } else if (allLogs.some(pendingTarget.matches)) {
+      toast.info("That line is hidden by the current filters", {
+        action: { label: "Clear filters", onClick: () => clearFilters() }
+      });
+    }
+    setPendingTarget(null);
+  }, [pendingTarget, view, isMergedView, selectedFileName, visibleLogs, allLogs, clearFilters]);
+
   if (logKeys.length === 0) {
     return <div className="p-4">No logs found. Please open a log file.</div>;
   }
@@ -320,7 +363,7 @@ function RouteComponent() {
             {/* One switch, always in the same place, so neither view is buried. */}
             <div className="px-2 py-1.5 border-b bg-background shrink-0 flex items-center gap-2">
               <div className="flex rounded-md border p-0.5 shrink-0">
-                {(["overview", "log"] as const).map((option) => (
+                {(["overview", "log", "compare"] as const).map((option) => (
                   <button
                     key={option}
                     type="button"
@@ -367,7 +410,9 @@ function RouteComponent() {
               )}
             </div>
 
-            {view === "overview" ? (
+            {view === "compare" ? (
+              <CompareView onJumpToEvidence={jumpToEvidence} />
+            ) : view === "overview" ? (
               <OverviewPanel
                 logs={allLogs}
                 fileName={selectedFileName}

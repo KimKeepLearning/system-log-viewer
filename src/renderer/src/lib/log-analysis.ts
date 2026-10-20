@@ -37,7 +37,11 @@ export interface Cluster {
 
 const MAX_CLUSTERS = 200;
 
-export const clusterMessages = (logs: AnalyzedLog[], onlyProblems = true): Cluster[] => {
+export const clusterMessages = (
+  logs: AnalyzedLog[],
+  onlyProblems = true,
+  limit = MAX_CLUSTERS
+): Cluster[] => {
   const clusters = new Map<string, Cluster>();
 
   for (let index = 0; index < logs.length; index++) {
@@ -73,7 +77,7 @@ export const clusterMessages = (logs: AnalyzedLog[], onlyProblems = true): Clust
     }
   }
 
-  return [...clusters.values()].sort((a, b) => b.count - a.count).slice(0, MAX_CLUSTERS);
+  return [...clusters.values()].sort((a, b) => b.count - a.count).slice(0, limit);
 };
 
 /**

@@ -1,6 +1,7 @@
 import { atom } from "jotai";
 import { DeviceInfo, IUserLog, LogFileContext, SectionStats } from "./typings";
 import { parseDeviceInfo } from "./log-parser";
+import type { ArchiveSummary } from "./log-diff";
 
 // Raw log files
 export const logFilesAtom = atom<LogFileContext[]>([]);
@@ -115,3 +116,6 @@ export const clearFiltersAtom = atom(null, (_get, set) => {
   set(sectionFilterAtom, new Set<string>());
   set(timeRangeAtom, null);
 });
+
+/** The archive the open one is being compared with, reduced to its summary. */
+export const compareArchiveAtom = atom<{ name: string; summary: ArchiveSummary } | null>(null);
