@@ -6,7 +6,7 @@ import { Input } from "@renderer/components/ui/input";
 import { cn } from "@renderer/lib/utils";
 import { logFilesAtom } from "@renderer/lib/atom";
 import { extractLogSection } from "@renderer/lib/log-parser";
-import { analyseLogs } from "@renderer/lib/log-analysis";
+import { analyseLogs, BootEnding, BootSession } from "@renderer/lib/log-analysis";
 import { summariseBoot } from "@renderer/lib/log-tables";
 import {
   formatMetric,
@@ -22,6 +22,7 @@ interface OverviewPanelProps {
   logs: ExtendedLog[];
   fileName: string | null;
   onJumpToLog: (log: ExtendedLog) => void;
+  onShowSession: (session: BootSession) => void;
 }
 
 const clock = (micros: number | null): string =>
@@ -36,6 +37,24 @@ const SEVERITY_STYLE: Record<RuleSeverity, { chip: string; Icon: typeof ShieldAl
   info: { chip: "bg-sky-500/15 text-sky-700 dark:text-sky-400", Icon: Info }
 };
 
+const ENDING_STYLE: Record<BootEnding, { label: string; chip: string; title: string }> = {
+  clean: {
+    label: "shut down",
+    chip: "bg-muted text-muted-foreground",
+    title: "Ended with a shutdown or restart line"
+  },
+  unclean: {
+    label: "unclean",
+    chip: "bg-red-500/15 text-red-600 dark:text-red-400",
+    title: "The next boot came with no shutdown before it: a crash, hang or power loss"
+  },
+  ongoing: {
+    label: "running",
+    chip: "bg-sky-500/15 text-sky-700 dark:text-sky-400",
+    title: "Still running when the report was taken"
+  }
+};
+
 const Stat = ({ label, value, hint }: { label: string; value: string; hint?: string }) => (
   <div className="flex flex-col gap-0.5 rounded-md border p-2">
     <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</span>
@@ -46,7 +65,7 @@ const Stat = ({ label, value, hint }: { label: string; value: string; hint?: str
 
 // A pass over a hundred thousand rows is about 200ms, which is why this is the
 // landing view rather than something computed during load.
-export function OverviewPanel({ logs, fileName, onJumpToLog }: OverviewPanelProps) {
+export function OverviewPanel({ logs, fileName, onJumpToLog, onShowSession }: OverviewPanelProps) {
   const logFiles = useAtomValue(logFilesAtom);
   const overview = useMemo(() => analyseLogs(logs), [logs]);
 
@@ -113,6 +132,12 @@ export function OverviewPanel({ logs, fileName, onJumpToLog }: OverviewPanelProp
           )}
         </TabsTrigger>
         <TabsTrigger value="clusters">Repeats</TabsTrigger>
+        {overview.sessions.length > 0 && (
+          <TabsTrigger value="boots">
+            Boots
+            <span className="ml-1 tabular-nums opacity-60">{overview.sessions.length}</span>
+          </TabsTrigger>
+        )}
         {boot && <TabsTrigger value="boot">Boot</TabsTrigger>}
         {metrics && <TabsTrigger value="metrics">Metrics</TabsTrigger>}
       </TabsList>
@@ -282,6 +307,57 @@ export function OverviewPanel({ logs, fileName, onJumpToLog }: OverviewPanelProp
             </button>
           ))}
         </TabsContent>
+
+        {overview.sessions.length > 0 && (
+          <TabsContent value="boots" className="flex flex-col m-0">
+            <p className="text-xs text-muted-foreground mb-2">
+              One row per kernel start. Pick one to read only that boot in the log.
+            </p>
+            <div className="grid grid-cols-[2rem_9rem_5rem_5rem_4rem_4rem_1fr] gap-x-2 text-[10px] uppercase tracking-wide text-muted-foreground border-b pb-1">
+              <span>#</span>
+              <span>Started (UTC)</span>
+              <span className="text-right">To login</span>
+              <span className="text-right">Ran for</span>
+              <span className="text-right">Lines</span>
+              <span className="text-right">Errors</span>
+              <span>Ended</span>
+            </div>
+            {overview.sessions.map((session) => {
+              const ending = ENDING_STYLE[session.ending];
+              return (
+                <button
+                  key={session.index}
+                  type="button"
+                  onClick={() => onShowSession(session)}
+                  className="grid grid-cols-[2rem_9rem_5rem_5rem_4rem_4rem_1fr] gap-x-2 items-baseline text-left text-xs tabular-nums py-1 border-b border-border/40 hover:bg-muted/60 transition-colors"
+                >
+                  <span className="font-medium">{session.index + 1}</span>
+                  <span>{clock(session.startTs)}</span>
+                  <span className="text-right">
+                    {session.loginPromptTs === null
+                      ? "—"
+                      : duration((session.loginPromptTs - session.startTs) / 1000)}
+                  </span>
+                  <span className="text-right">
+                    {duration((session.lastTs - session.startTs) / 1000)}
+                  </span>
+                  <span className="text-right">{session.lines.toLocaleString()}</span>
+                  <span className={cn("text-right", session.errors > 0 && "text-red-500")}>
+                    {session.errors.toLocaleString()}
+                  </span>
+                  <span>
+                    <span
+                      className={cn("rounded px-1.5 py-0.5 text-[10px] font-medium", ending.chip)}
+                      title={ending.title}
+                    >
+                      {ending.label}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+          </TabsContent>
+        )}
 
         {boot && (
           <TabsContent value="boot" className="flex flex-col gap-3 m-0">

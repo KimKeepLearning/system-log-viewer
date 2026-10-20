@@ -76,12 +76,30 @@ export const clusterMessages = (logs: AnalyzedLog[], onlyProblems = true): Clust
   return [...clusters.values()].sort((a, b) => b.count - a.count).slice(0, MAX_CLUSTERS);
 };
 
+/**
+ * "clean" ends in a shutdown or restart line; "unclean" ends with the next boot
+ * and nothing announcing it -- a crash, a hang or power loss. The last session
+ * is "ongoing": the report was taken while it ran.
+ */
+export type BootEnding = "clean" | "unclean" | "ongoing";
+
 export interface BootSession {
   index: number;
   startTs: number;
+  /** Where the next boot starts, or the last line on the clock for the final one. */
   endTs: number;
+  /** The last timestamped line inside the session. */
+  lastTs: number;
   lines: number;
+  errors: number;
+  /** First login prompt after the kernel started: what people mean by boot time. */
+  loginPromptTs: number | null;
+  ending: BootEnding;
 }
+
+const LOGIN_PROMPT = /login-prompt-visible/i;
+const SHUTDOWN =
+  /^(?:Shutting down|Restarting system)\b|^reboot: (?:Restarting system|Power down)/i;
 
 /**
  * Splits the log at the points the kernel announced itself. Most archives hold
@@ -107,17 +125,43 @@ export const detectBootSessions = (logs: AnalyzedLog[]): BootSession[] => {
   if (starts.length === 0) return [];
   starts.sort((a, b) => a - b);
 
-  let latest = -Infinity;
-  for (const log of logs) if (typeof log.ts === "number" && log.ts > latest) latest = log.ts;
+  const sessions: BootSession[] = starts.map((startTs, index) => ({
+    index,
+    startTs,
+    endTs: starts[index + 1] ?? startTs,
+    lastTs: startTs,
+    lines: 0,
+    errors: 0,
+    loginPromptTs: null,
+    ending: index + 1 < starts.length ? "unclean" : "ongoing"
+  }));
 
-  return starts.map((startTs, index) => {
-    const endTs = index + 1 < starts.length ? starts[index + 1] : latest;
-    let lines = 0;
-    for (const log of logs) {
-      if (typeof log.ts === "number" && log.ts >= startTs && log.ts < endTs) lines++;
+  for (const log of logs) {
+    const ts = log.ts;
+    if (typeof ts !== "number" || ts < starts[0]) continue;
+
+    let low = 0;
+    let high = starts.length - 1;
+    while (low < high) {
+      const mid = (low + high + 1) >> 1;
+      if (starts[mid] <= ts) low = mid;
+      else high = mid - 1;
     }
-    return { index, startTs, endTs, lines };
-  });
+    const session = sessions[low];
+
+    session.lines++;
+    if (log.level === "ERROR") session.errors++;
+    if (ts > session.lastTs) session.lastTs = ts;
+    if (!log.message) continue;
+    if (LOGIN_PROMPT.test(log.message) && (session.loginPromptTs ?? Infinity) > ts) {
+      session.loginPromptTs = ts;
+    }
+    if (session.ending === "unclean" && SHUTDOWN.test(log.message)) session.ending = "clean";
+  }
+
+  const final = sessions[sessions.length - 1];
+  final.endTs = final.lastTs;
+  return sessions;
 };
 
 export interface TimelineEvent {

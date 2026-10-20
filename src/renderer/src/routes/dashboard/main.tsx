@@ -9,7 +9,8 @@ import {
   currentMatchIndexAtom,
   logFilesAtom,
   clearFiltersAtom,
-  searchModeAtom
+  searchModeAtom,
+  timeRangeAtom
 } from "@renderer/lib/atom";
 import { extractLogSection, parseDeviceInfo } from "@renderer/lib/log-parser";
 import { hierarchyKindOf } from "@renderer/lib/ui-hierarchy";
@@ -76,6 +77,7 @@ function RouteComponent() {
   const setMatchesCount = useSetAtom(searchMatchesCountAtom);
   const clearFilters = useSetAtom(clearFiltersAtom);
   const [searchMode, setSearchMode] = useAtom(searchModeAtom);
+  const setTimeRange = useSetAtom(timeRangeAtom);
   const [currentMatchIndex] = useAtom(currentMatchIndexAtom);
   // histograms.txt is a table of distributions, not a log; rendering it in the
   // log list produced one unreadable row of JSON.
@@ -385,6 +387,10 @@ function RouteComponent() {
                       action: { label: "Clear filters", onClick: () => clearFilters() }
                     });
                   }
+                }}
+                onShowSession={(session) => {
+                  setTimeRange({ from: session.startTs, to: session.lastTs });
+                  setView("log");
                 }}
               />
             ) : (
