@@ -8,7 +8,8 @@ import {
   searchMatchesCountAtom,
   currentMatchIndexAtom,
   logFilesAtom,
-  clearFiltersAtom
+  clearFiltersAtom,
+  searchModeAtom
 } from "@renderer/lib/atom";
 import { extractLogSection, parseDeviceInfo } from "@renderer/lib/log-parser";
 import { hierarchyKindOf } from "@renderer/lib/ui-hierarchy";
@@ -41,6 +42,7 @@ import { FilterBar } from "./components/filter-bar";
 import { TimelineStrip } from "./components/timeline-strip";
 import { SearchResultsPanel } from "./components/search-results-panel";
 import { LogList } from "./components/log-list";
+import { ExtendedLog } from "./types";
 
 export const Route = createFileRoute("/dashboard/main")({
   component: RouteComponent
@@ -65,6 +67,7 @@ function RouteComponent() {
   const [view, setView] = useState<"overview" | "log">("overview");
   const [pendingScrollIndex, setPendingScrollIndex] = useState<number | null>(null);
   const [pendingTag, setPendingTag] = useState<string | null>(null);
+  const [pendingLog, setPendingLog] = useState<ExtendedLog | null>(null);
   const [flash, setFlash] = useState<{ index: number; token: number } | null>(null);
 
   const [searchQuery] = useAtom(searchQueryAtom);
@@ -72,6 +75,7 @@ function RouteComponent() {
   const patterns = useMemo(() => highlightPatterns(parsedQuery), [parsedQuery]);
   const setMatchesCount = useSetAtom(searchMatchesCountAtom);
   const clearFilters = useSetAtom(clearFiltersAtom);
+  const [searchMode, setSearchMode] = useAtom(searchModeAtom);
   const [currentMatchIndex] = useAtom(currentMatchIndexAtom);
   // histograms.txt is a table of distributions, not a log; rendering it in the
   // log list produced one unreadable row of JSON.
@@ -250,6 +254,27 @@ function RouteComponent() {
     }
   }, [activeMatchLogIndex]);
 
+  const showInFullLog = useCallback(
+    (log: ExtendedLog) => {
+      clearFilters();
+      if (searchMode === "filter") setSearchMode("highlight");
+      setPendingLog(log);
+    },
+    [clearFilters, searchMode, setSearchMode]
+  );
+
+  // Declared after the active-match scroll so it wins when clearing the
+  // filters also moves the current search match.
+  useEffect(() => {
+    if (pendingLog === null || visibleLogs !== allLogs) return;
+    const index = allLogs.indexOf(pendingLog);
+    if (index >= 0) {
+      virtuosoRef.current?.scrollToIndex({ index, align: "center" });
+      setFlash({ index, token: Date.now() });
+    }
+    setPendingLog(null);
+  }, [pendingLog, visibleLogs, allLogs]);
+
   if (logKeys.length === 0) {
     return <div className="p-4">No logs found. Please open a log file.</div>;
   }
@@ -412,6 +437,7 @@ function RouteComponent() {
                   virtuosoRef={virtuosoRef}
                   highlightedIndex={activeMatchLogIndex}
                   flash={flash}
+                  onShowInFullLog={visibleLogs !== allLogs ? showInFullLog : undefined}
                 />
 
                 <SearchResultsPanel

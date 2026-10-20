@@ -23,7 +23,7 @@ import { sectionNameOf } from "@renderer/lib/log-domains";
 import { bookmarkKey, bookmarkKeysAtom, toggleBookmarkAtom } from "@renderer/lib/bookmarks";
 import { selectedTimeAtom } from "@renderer/lib/atom";
 import { useAtomValue, useSetAtom } from "jotai";
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import { rangeFromSelection, useCopyLogs } from "../hooks/use-copy-logs";
 import { useLogSelection } from "../hooks/use-log-selection";
@@ -43,6 +43,8 @@ interface LogListProps {
   highlightedIndex?: number;
   /** Row to flash once on arrival; the token restarts the animation. */
   flash?: { index: number; token: number } | null;
+  /** Only passed while filters hide part of the log. */
+  onShowInFullLog?: (log: ExtendedLog) => void;
 }
 
 export const LogList = ({
@@ -56,7 +58,8 @@ export const LogList = ({
   patterns,
   virtuosoRef,
   highlightedIndex,
-  flash
+  flash,
+  onShowInFullLog
 }: LogListProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const { range, selectedCount, selectRow, selectRange, extendTo, isSelected } = useLogSelection();
@@ -74,6 +77,12 @@ export const LogList = ({
     },
     [logs, selectRow, setSelectedTime]
   );
+
+  // Arriving at a line selects it, so the menu and the timeline act on it next.
+  useEffect(() => {
+    if (flash) selectAndMark(flash.index);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flash]);
 
   // Sections this view holds, for "jump to this time in ...".
   const sectionKeys = useMemo(() => {
@@ -382,6 +391,14 @@ export const LogList = ({
 
         <ContextMenuSeparator />
 
+        {onShowInFullLog && (
+          <ContextMenuItem
+            disabled={!anchorLog}
+            onSelect={() => anchorLog && onShowInFullLog(anchorLog)}
+          >
+            Show in full log
+          </ContextMenuItem>
+        )}
         <ContextMenuItem
           disabled={!anchorLog}
           onSelect={() => anchorLog && toggleBookmark(anchorLog)}
