@@ -124,3 +124,5 @@ export const compareArchiveAtom = atom<{ name: string; summary: ArchiveSummary }
 /** Lines Claude marked during the current investigation. */
 export const aiMarksAtom = atom<AiMark[]>([]);
 export const aiPanelOpenAtom = atom(false);
+/** What Claude Code has been doing through the MCP server, newest last. */
+export const mcpActivityAtom = atom<McpActivity[]>([]);

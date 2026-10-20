@@ -67,11 +67,30 @@ declare global {
     | { runId: string; type: "done" }
     | { runId: string; type: "error"; message: string };
 
+  /** Mirrors McpStatus in src/main/mcp/index.ts. */
+  interface McpStatus {
+    url: string;
+    token: string;
+    listening: boolean;
+    error: string | null;
+  }
+
+  interface McpActivity {
+    name: string;
+    input: unknown;
+    at: number;
+  }
+
   interface Window {
     electron: ElectronAPI;
     api: {
       getPathForFile: (file: File) => string;
       readLogFile: (filePath: string) => Promise<ExtractedLogFile[]>;
+      mcp: {
+        status: () => Promise<McpStatus | null>;
+        serve: (handler: (name: string, input: unknown) => string) => () => void;
+        onActivity: (listener: (activity: McpActivity) => void) => () => void;
+      };
       ai: {
         getSettings: () => Promise<AiSettings>;
         setKey: (key: string | null) => Promise<AiSettings>;

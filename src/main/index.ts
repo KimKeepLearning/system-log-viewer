@@ -5,6 +5,7 @@ import icon from "../../resources/icon.png?asset";
 const { updateElectronApp } = require("update-electron-app");
 import { registerSSHHandlers } from "./ssh";
 import { registerAiHandlers } from "./ai";
+import { startMcpServer } from "./mcp";
 import { readLogFile } from "./archive";
 
 registerSSHHandlers();
@@ -79,6 +80,7 @@ app.whenReady().then(() => {
     return files;
   });
 
+  startMcpServer();
   createWindow();
 
   app.on("activate", function () {

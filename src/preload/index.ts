@@ -3,6 +3,26 @@ import { electronAPI } from "@electron-toolkit/preload";
 import type { ExtractedLogFile } from "../main/archive";
 import type { ExecResult, SSHTarget } from "../main/ssh";
 import type { AiEvent, AiRunRequest, AiSettings } from "../main/ai";
+import type { McpStatus } from "../main/mcp";
+
+type McpHandler = (name: string, input: unknown) => string;
+let mcpHandler: McpHandler | null = null;
+
+// Installed once, so Claude Code gets an answer even before a log is open.
+ipcRenderer.on(
+  "mcp:tool-call",
+  (_event: IpcRendererEvent, payload: { callId: string; name: string; input: unknown }) => {
+    let result: string;
+    try {
+      result = mcpHandler
+        ? mcpHandler(payload.name, payload.input)
+        : "No log archive is open in System Log Viewer. Ask the engineer to open one.";
+    } catch (error) {
+      result = `Error: ${error instanceof Error ? error.message : String(error)}`;
+    }
+    ipcRenderer.send("mcp:tool-result", { callId: payload.callId, result });
+  }
+);
 
 interface FollowStatus {
   id: string;
@@ -19,6 +39,26 @@ const api = {
   },
   readLogFile: (filePath: string): Promise<ExtractedLogFile[]> => {
     return ipcRenderer.invoke("read-file", filePath);
+  },
+  mcp: {
+    status: (): Promise<McpStatus | null> => ipcRenderer.invoke("mcp:status"),
+    /** Answers Claude Code's log tool calls until the returned function is called. */
+    serve: (handler: McpHandler): (() => void) => {
+      mcpHandler = handler;
+      return () => {
+        if (mcpHandler === handler) mcpHandler = null;
+      };
+    },
+    onActivity: (
+      listener: (activity: { name: string; input: unknown; at: number }) => void
+    ): (() => void) => {
+      const wrapped = (
+        _event: IpcRendererEvent,
+        payload: { name: string; input: unknown; at: number }
+      ) => listener(payload);
+      ipcRenderer.on("mcp:activity", wrapped);
+      return () => ipcRenderer.off("mcp:activity", wrapped);
+    }
   },
   ai: {
     getSettings: (): Promise<AiSettings> => ipcRenderer.invoke("ai:get-settings"),

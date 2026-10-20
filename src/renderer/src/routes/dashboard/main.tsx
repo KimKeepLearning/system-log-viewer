@@ -40,6 +40,7 @@ import { HierarchyView } from "./components/hierarchy-view";
 import { useLogProcessing } from "./hooks/use-log-processing";
 import { useLogSearch } from "./hooks/use-log-search";
 import { useLogFilter } from "./hooks/use-log-filter";
+import { useMcpBridge } from "./hooks/use-mcp-bridge";
 import { FileSidebar } from "./components/file-sidebar";
 import { FilterBar } from "./components/filter-bar";
 import { TimelineStrip } from "./components/timeline-strip";
@@ -61,6 +62,7 @@ function RouteComponent() {
   const logKeys = useAtomValue(logKeysAtom);
   const parsedLogs = useAtomValue(parsedLogsMapAtom);
   const logFiles = useAtomValue(logFilesAtom);
+  const logTools = useMcpBridge();
 
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -538,7 +540,9 @@ function RouteComponent() {
         )}
       </div>
 
-      {aiPanelMounted && <AiPanel hidden={!aiPanelOpen} onJumpToLine={jumpToLine} />}
+      {aiPanelMounted && (
+        <AiPanel hidden={!aiPanelOpen} onJumpToLine={jumpToLine} logTools={logTools} />
+      )}
     </div>
   );
 }

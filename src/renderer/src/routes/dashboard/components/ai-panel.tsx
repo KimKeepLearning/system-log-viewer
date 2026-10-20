@@ -1,16 +1,24 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
-import { FolderGit2, Loader2, Settings, Sparkles, Square, X } from "lucide-react";
+import { Check, Copy, FolderGit2, Loader2, Settings, Sparkles, Square, X } from "lucide-react";
 import { Textarea } from "@renderer/components/ui/textarea";
 import { Input } from "@renderer/components/ui/input";
 import { cn } from "@renderer/lib/utils";
-import { aiMarksAtom, aiPanelOpenAtom, logFilesAtom, parsedLogsMapAtom } from "@renderer/lib/atom";
+import {
+  aiMarksAtom,
+  aiPanelOpenAtom,
+  logFilesAtom,
+  mcpActivityAtom,
+  parsedLogsMapAtom
+} from "@renderer/lib/atom";
 import { AI_MARK_STYLE, createLogTools } from "@renderer/lib/ai-tools";
 import { createRedactor } from "@renderer/lib/log-redact";
 
 interface AiPanelProps {
   hidden: boolean;
   onJumpToLine: (key: string, index: number) => void;
+  /** The dashboard's tools over the open archive, for resolving refs. */
+  logTools: ReturnType<typeof createLogTools>;
 }
 
 interface Run {
@@ -38,6 +46,10 @@ const describeStep = (name: string, input: unknown): string => {
       return `Read source ${args.path}${args.line ? `:${args.line}` : ""}`;
     case "search_source":
       return `Searched source for ${quote(args.pattern)} in ${args.path}`;
+    case "get_overview":
+      return "Read the archive overview";
+    case "clear_marks":
+      return "Cleared the marks";
     default:
       return name;
   }
@@ -45,11 +57,17 @@ const describeStep = (name: string, input: unknown): string => {
 
 const REF_IN_TEXT = /\bs\d+:\d+\b/g;
 
-export function AiPanel({ hidden, onJumpToLine }: AiPanelProps) {
+const connectCommand = (status: McpStatus) =>
+  `claude mcp add --scope user --transport http system-log-viewer ${status.url} --header "Authorization: Bearer ${status.token}"`;
+
+export function AiPanel({ hidden, onJumpToLine, logTools }: AiPanelProps) {
   const logFiles = useAtomValue(logFilesAtom);
   const parsedLogs = useAtomValue(parsedLogsMapAtom);
   const [marks, setMarks] = useAtom(aiMarksAtom);
   const setOpen = useSetAtom(aiPanelOpenAtom);
+  const activity = useAtomValue(mcpActivityAtom);
+  const [mcpStatus, setMcpStatus] = useState<McpStatus | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const [settings, setSettings] = useState<AiSettings | null>(null);
   const [showSettings, setShowSettings] = useState(false);
@@ -63,7 +81,16 @@ export function AiPanel({ hidden, onJumpToLine }: AiPanelProps) {
 
   useEffect(() => {
     window.api.ai.getSettings().then(setSettings);
+    window.api.mcp.status().then(setMcpStatus);
   }, []);
+
+  const copyCommand = () => {
+    if (!mcpStatus) return;
+    void navigator.clipboard.writeText(connectCommand(mcpStatus)).then(() => {
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    });
+  };
 
   useEffect(() => {
     const stop = window.api.ai.listen(
@@ -136,7 +163,7 @@ export function AiPanel({ hidden, onJumpToLine }: AiPanelProps) {
   };
 
   const jumpToRef = (ref: string) => {
-    const target = toolsRef.current?.resolve(ref);
+    const target = logTools.resolve(ref);
     if (target) onJumpToLine(target.key, target.index);
   };
 
@@ -192,7 +219,7 @@ export function AiPanel({ hidden, onJumpToLine }: AiPanelProps) {
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto scrollbar-container p-3 flex flex-col gap-3">
-        {(showSettings || needsKey) && settings && (
+        {showSettings && settings && (
           <div className="rounded-md border p-2.5 flex flex-col gap-2 text-xs">
             <div className="font-medium">Anthropic API key</div>
             <p className="text-muted-foreground">
@@ -258,43 +285,146 @@ export function AiPanel({ hidden, onJumpToLine }: AiPanelProps) {
           </div>
         )}
 
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium" htmlFor="ai-problem">
-            What did the user report?
-          </label>
-          <Textarea
-            id="ai-problem"
-            value={problem}
-            onChange={(event) => setProblem(event.target.value)}
-            placeholder="Paste the customer's words, e.g. 下午三点左右连着 Wi-Fi 突然断了，重连也连不上"
-            className="text-xs min-h-24 max-h-60"
-          />
-          <div className="flex items-center gap-2">
-            {run?.running ? (
-              <button
-                type="button"
-                onClick={stop}
-                className="h-7 px-3 rounded-md border text-xs font-medium hover:bg-muted inline-flex items-center gap-1.5"
+        <div className="rounded-md border p-2.5 flex flex-col gap-2 text-xs">
+          <div className="flex items-center gap-1.5">
+            <span className="font-medium">Use with Claude Code</span>
+            {mcpStatus && (
+              <span
+                className={cn(
+                  "ml-auto inline-flex items-center gap-1 text-[10px]",
+                  mcpStatus.listening ? "text-emerald-600" : "text-red-500"
+                )}
               >
-                <Square className="size-3" />
-                Stop
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={start}
-                disabled={!problem.trim() || needsKey || !settings}
-                className="h-7 px-3 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 disabled:opacity-50 inline-flex items-center gap-1.5"
-              >
-                <Sparkles className="size-3" />
-                Find it in the log
-              </button>
+                <span
+                  className={cn(
+                    "size-1.5 rounded-full",
+                    mcpStatus.listening ? "bg-emerald-500" : "bg-red-500"
+                  )}
+                />
+                {mcpStatus.listening ? "Ready" : "Not running"}
+              </span>
             )}
-            <span className="text-[10px] text-muted-foreground">
-              Opus 5.5 · log text is redacted before it is sent
-            </span>
           </div>
+          <p className="text-muted-foreground">
+            Works with your Claude Team seat, no API key. Run this once in a terminal; the terminal
+            and the VS Code extension both pick it up.
+          </p>
+          {mcpStatus?.error && <p className="text-red-500">{mcpStatus.error}</p>}
+          {mcpStatus && (
+            <div className="relative">
+              <pre className="font-mono text-[10px] bg-muted/50 rounded p-2 pr-8 whitespace-pre-wrap break-all select-all">
+                {connectCommand(mcpStatus)}
+              </pre>
+              <button
+                type="button"
+                title="Copy"
+                onClick={copyCommand}
+                className="absolute top-1 right-1 size-6 inline-flex items-center justify-center rounded-md text-muted-foreground hover:bg-muted"
+              >
+                {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+              </button>
+            </div>
+          )}
+          <p className="text-muted-foreground">
+            Then ask Claude Code, for example:{" "}
+            <span className="text-foreground">
+              用 system-log-viewer 查一下这个反馈：下午连着 Wi-Fi 突然断了
+            </span>
+            . Lines it marks light up here and in the log.
+          </p>
+          {activity.length > 0 && (
+            <details open className="text-[11px] text-muted-foreground">
+              <summary className="cursor-pointer select-none">
+                Claude Code activity ({activity.length})
+              </summary>
+              <ol className="mt-1 flex flex-col gap-0.5 pl-4 list-decimal">
+                {activity.map((entry) => (
+                  <li key={entry.at + entry.name} className="break-words">
+                    {renderAnswer(describeStep(entry.name, entry.input))}
+                  </li>
+                ))}
+              </ol>
+            </details>
+          )}
         </div>
+
+        <details className="flex flex-col gap-1.5 group">
+          <summary className="text-xs font-medium cursor-pointer select-none">
+            Or use an Anthropic API key
+          </summary>
+          <div className="flex flex-col gap-1.5 mt-1.5">
+            {needsKey && (
+              <p className="text-xs text-muted-foreground">
+                Add a key under settings (the gear above) first.
+              </p>
+            )}
+            <label className="text-xs font-medium" htmlFor="ai-problem">
+              What did the user report?
+            </label>
+            <Textarea
+              id="ai-problem"
+              value={problem}
+              onChange={(event) => setProblem(event.target.value)}
+              placeholder="Paste the customer's words, e.g. 下午三点左右连着 Wi-Fi 突然断了，重连也连不上"
+              className="text-xs min-h-24 max-h-60"
+            />
+            <div className="flex items-center gap-2">
+              {run?.running ? (
+                <button
+                  type="button"
+                  onClick={stop}
+                  className="h-7 px-3 rounded-md border text-xs font-medium hover:bg-muted inline-flex items-center gap-1.5"
+                >
+                  <Square className="size-3" />
+                  Stop
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={start}
+                  disabled={!problem.trim() || needsKey || !settings}
+                  className="h-7 px-3 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 disabled:opacity-50 inline-flex items-center gap-1.5"
+                >
+                  <Sparkles className="size-3" />
+                  Find it in the log
+                </button>
+              )}
+              <span className="text-[10px] text-muted-foreground">
+                Opus 5.5 · log text is redacted before it is sent
+              </span>
+            </div>
+          </div>
+
+          {run && (run.answer || run.error) && (
+            <div className="text-xs whitespace-pre-wrap leading-relaxed select-text">
+              {renderAnswer(run.answer)}
+              {run.error && <p className="text-red-500 mt-2">{run.error}</p>}
+            </div>
+          )}
+
+          {run && run.steps.length > 0 && (
+            <details open={run.running} className="text-[11px] text-muted-foreground">
+              <summary className="cursor-pointer select-none inline-flex items-center gap-1.5">
+                {run.running && <Loader2 className="size-3 animate-spin" />}
+                {run.steps.length} step{run.steps.length === 1 ? "" : "s"}
+              </summary>
+              <ol className="mt-1 flex flex-col gap-0.5 pl-4 list-decimal">
+                {run.steps.map((step, index) => (
+                  <li key={index} className="break-words">
+                    {renderAnswer(step)}
+                  </li>
+                ))}
+              </ol>
+            </details>
+          )}
+
+          {run?.running && run.steps.length === 0 && (
+            <div className="text-xs text-muted-foreground inline-flex items-center gap-1.5">
+              <Loader2 className="size-3 animate-spin" />
+              Reading the overview…
+            </div>
+          )}
+        </details>
 
         {marks.length > 0 && (
           <div className="flex flex-col gap-1">
@@ -325,36 +455,6 @@ export function AiPanel({ hidden, onJumpToLine }: AiPanelProps) {
                 </span>
               </button>
             ))}
-          </div>
-        )}
-
-        {run && (run.answer || run.error) && (
-          <div className="text-xs whitespace-pre-wrap leading-relaxed select-text">
-            {renderAnswer(run.answer)}
-            {run.error && <p className="text-red-500 mt-2">{run.error}</p>}
-          </div>
-        )}
-
-        {run && run.steps.length > 0 && (
-          <details open={run.running} className="text-[11px] text-muted-foreground">
-            <summary className="cursor-pointer select-none inline-flex items-center gap-1.5">
-              {run.running && <Loader2 className="size-3 animate-spin" />}
-              {run.steps.length} step{run.steps.length === 1 ? "" : "s"}
-            </summary>
-            <ol className="mt-1 flex flex-col gap-0.5 pl-4 list-decimal">
-              {run.steps.map((step, index) => (
-                <li key={index} className="break-words">
-                  {renderAnswer(step)}
-                </li>
-              ))}
-            </ol>
-          </details>
-        )}
-
-        {run?.running && run.steps.length === 0 && (
-          <div className="text-xs text-muted-foreground inline-flex items-center gap-1.5">
-            <Loader2 className="size-3 animate-spin" />
-            Reading the overview…
           </div>
         )}
       </div>
