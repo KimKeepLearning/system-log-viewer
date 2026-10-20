@@ -37,7 +37,8 @@ const fold = (source: { key: string; log: IUserLog }[]): ExtendedLog[] => {
       sourceFile: key,
       count: 1,
       duplicates: NO_DUPLICATES,
-      id: `${key}#${ordinal}`
+      id: `${key}#${ordinal}`,
+      raw: log
     });
   }
 

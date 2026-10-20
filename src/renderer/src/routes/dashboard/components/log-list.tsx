@@ -22,6 +22,8 @@ import { buildLogText, countLogLines } from "@renderer/lib/log-utils";
 import { sectionNameOf } from "@renderer/lib/log-domains";
 import { bookmarkKey, bookmarkKeysAtom, toggleBookmarkAtom } from "@renderer/lib/bookmarks";
 import { selectedTimeAtom } from "@renderer/lib/atom";
+import { AI_MARK_STYLE, AiMark } from "@renderer/lib/ai-tools";
+import { IUserLog } from "@renderer/lib/typings";
 import { useAtomValue, useSetAtom } from "jotai";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
@@ -45,6 +47,8 @@ interface LogListProps {
   flash?: { index: number; token: number } | null;
   /** Only passed while filters hide part of the log. */
   onShowInFullLog?: (log: ExtendedLog) => void;
+  /** Lines Claude marked, keyed by the parsed line. */
+  marks?: Map<IUserLog, AiMark>;
 }
 
 export const LogList = ({
@@ -59,7 +63,8 @@ export const LogList = ({
   virtuosoRef,
   highlightedIndex,
   flash,
-  onShowInFullLog
+  onShowInFullLog,
+  marks
 }: LogListProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const { range, selectedCount, selectRow, selectRange, extendTo, isSelected } = useLogSelection();
@@ -227,11 +232,20 @@ export const LogList = ({
                 "chrome_system_log",
                 "chrome_system_log.PREVIOUS"
               ].includes(sectionName);
+              const mark =
+                marks && marks.size > 0
+                  ? (marks.get(log.raw) ??
+                    log.duplicates.map((duplicate) => marks.get(duplicate)).find(Boolean))
+                  : undefined;
 
               return (
                 <div
                   data-log-index={index}
-                  className={cn("relative", isSelected(index) && "bg-primary/10")}
+                  className={cn(
+                    "relative",
+                    isSelected(index) && "bg-primary/10",
+                    mark && cn("border-l-2", AI_MARK_STYLE[mark.kind].border)
+                  )}
                   onClick={(event) => handleRowClick(event, index)}
                   onMouseDown={(event) => {
                     // Stop the browser extending its text selection, which would
@@ -334,6 +348,20 @@ export const LogList = ({
                       >
                         <LogRow log={log} patterns={patterns} />
                       </div>
+                    </div>
+                  )}
+
+                  {mark && (
+                    <div className="pl-4 pr-2 pb-1 text-[11px] flex items-baseline gap-1.5">
+                      <span
+                        className={cn(
+                          "rounded px-1 py-px text-[10px] font-medium shrink-0",
+                          AI_MARK_STYLE[mark.kind].chip
+                        )}
+                      >
+                        {mark.kind}
+                      </span>
+                      <span className="text-muted-foreground">{mark.note}</span>
                     </div>
                   )}
 

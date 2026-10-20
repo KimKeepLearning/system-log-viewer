@@ -4,9 +4,11 @@ import { electronApp, optimizer, is } from "@electron-toolkit/utils";
 import icon from "../../resources/icon.png?asset";
 const { updateElectronApp } = require("update-electron-app");
 import { registerSSHHandlers } from "./ssh";
+import { registerAiHandlers } from "./ai";
 import { readLogFile } from "./archive";
 
 registerSSHHandlers();
+registerAiHandlers();
 
 updateElectronApp();
 

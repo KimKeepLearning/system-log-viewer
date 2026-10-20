@@ -10,7 +10,9 @@ import {
   logFilesAtom,
   clearFiltersAtom,
   searchModeAtom,
-  timeRangeAtom
+  timeRangeAtom,
+  aiMarksAtom,
+  aiPanelOpenAtom
 } from "@renderer/lib/atom";
 import { extractLogSection, parseDeviceInfo } from "@renderer/lib/log-parser";
 import { hierarchyKindOf } from "@renderer/lib/ui-hierarchy";
@@ -44,7 +46,10 @@ import { TimelineStrip } from "./components/timeline-strip";
 import { SearchResultsPanel } from "./components/search-results-panel";
 import { LogList } from "./components/log-list";
 import { CompareView } from "./components/compare-view";
+import { AiPanel } from "./components/ai-panel";
 import type { Evidence } from "@renderer/lib/log-diff";
+import type { AiMark } from "@renderer/lib/ai-tools";
+import type { IUserLog } from "@renderer/lib/typings";
 import { ExtendedLog } from "./types";
 
 export const Route = createFileRoute("/dashboard/main")({
@@ -75,6 +80,14 @@ function RouteComponent() {
     sourceFile: string;
     matches: (log: ExtendedLog) => boolean;
   } | null>(null);
+  const aiMarks = useAtomValue(aiMarksAtom);
+  const aiPanelOpen = useAtomValue(aiPanelOpenAtom);
+  // Mounted on first open and then only hidden, so an investigation keeps
+  // running while the panel is out of the way.
+  const [aiPanelMounted, setAiPanelMounted] = useState(false);
+  useEffect(() => {
+    if (aiPanelOpen) setAiPanelMounted(true);
+  }, [aiPanelOpen]);
   const [flash, setFlash] = useState<{ index: number; token: number } | null>(null);
 
   const [searchQuery] = useAtom(searchQueryAtom);
@@ -305,6 +318,14 @@ function RouteComponent() {
     [jumpTo]
   );
 
+  const jumpToLine = useCallback(
+    (key: string, index: number) => {
+      const raw = parsedLogs[key]?.[index];
+      if (raw) jumpTo(key, (log) => log.raw === raw || log.duplicates.includes(raw));
+    },
+    [jumpTo, parsedLogs]
+  );
+
   useEffect(() => {
     if (pendingTarget === null || view !== "log") return;
     if (!isMergedView && pendingTarget.sourceFile.split("::")[0] !== selectedFileName) return;
@@ -319,6 +340,15 @@ function RouteComponent() {
     }
     setPendingTarget(null);
   }, [pendingTarget, view, isMergedView, selectedFileName, visibleLogs, allLogs, clearFilters]);
+
+  const marksByLine = useMemo(() => {
+    const map = new Map<IUserLog, AiMark>();
+    for (const mark of aiMarks) {
+      const raw = parsedLogs[mark.key]?.[mark.index];
+      if (raw) map.set(raw, mark);
+    }
+    return map;
+  }, [aiMarks, parsedLogs]);
 
   if (logKeys.length === 0) {
     return <div className="p-4">No logs found. Please open a log file.</div>;
@@ -489,6 +519,7 @@ function RouteComponent() {
                   highlightedIndex={activeMatchLogIndex}
                   flash={flash}
                   onShowInFullLog={visibleLogs !== allLogs ? showInFullLog : undefined}
+                  marks={marksByLine}
                 />
 
                 <SearchResultsPanel
@@ -506,6 +537,8 @@ function RouteComponent() {
           </>
         )}
       </div>
+
+      {aiPanelMounted && <AiPanel hidden={!aiPanelOpen} onJumpToLine={jumpToLine} />}
     </div>
   );
 }

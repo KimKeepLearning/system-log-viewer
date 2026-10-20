@@ -48,11 +48,42 @@ declare global {
     message?: string;
   }
 
+  /** Mirrors AiSettings in src/main/ai/settings.ts. */
+  interface AiSettings {
+    hasKey: boolean;
+    sourceRoot: string | null;
+  }
+
+  /** Mirrors AiRunRequest in src/main/ai/agent.ts. */
+  interface AiRunRequest {
+    problem: string;
+    context: string;
+  }
+
+  /** Mirrors AiEvent in src/main/ai/agent.ts. */
+  type AiEvent =
+    | { runId: string; type: "text"; text: string }
+    | { runId: string; type: "tool"; name: string; input: unknown }
+    | { runId: string; type: "done" }
+    | { runId: string; type: "error"; message: string };
+
   interface Window {
     electron: ElectronAPI;
     api: {
       getPathForFile: (file: File) => string;
       readLogFile: (filePath: string) => Promise<ExtractedLogFile[]>;
+      ai: {
+        getSettings: () => Promise<AiSettings>;
+        setKey: (key: string | null) => Promise<AiSettings>;
+        pickSourceRoot: () => Promise<AiSettings>;
+        clearSourceRoot: () => Promise<AiSettings>;
+        start: (request: AiRunRequest) => Promise<string>;
+        cancel: (runId: string) => Promise<void>;
+        listen: (
+          onEvent: (event: AiEvent) => void,
+          onToolCall: (call: { runId: string; name: string; input: unknown }) => string
+        ) => () => void;
+      };
       ssh: {
         readFile: (target: SSHTarget, filePath: string) => Promise<string>;
         exec: (target: SSHTarget, command: string) => Promise<SSHExecResult>;

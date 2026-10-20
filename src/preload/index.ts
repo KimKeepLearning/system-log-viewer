@@ -2,6 +2,7 @@ import { contextBridge, webUtils, ipcRenderer, IpcRendererEvent } from "electron
 import { electronAPI } from "@electron-toolkit/preload";
 import type { ExtractedLogFile } from "../main/archive";
 import type { ExecResult, SSHTarget } from "../main/ssh";
+import type { AiEvent, AiRunRequest, AiSettings } from "../main/ai";
 
 interface FollowStatus {
   id: string;
@@ -18,6 +19,42 @@ const api = {
   },
   readLogFile: (filePath: string): Promise<ExtractedLogFile[]> => {
     return ipcRenderer.invoke("read-file", filePath);
+  },
+  ai: {
+    getSettings: (): Promise<AiSettings> => ipcRenderer.invoke("ai:get-settings"),
+    setKey: (key: string | null): Promise<AiSettings> => ipcRenderer.invoke("ai:set-key", key),
+    pickSourceRoot: (): Promise<AiSettings> => ipcRenderer.invoke("ai:pick-source-root"),
+    clearSourceRoot: (): Promise<AiSettings> => ipcRenderer.invoke("ai:clear-source-root"),
+    start: (request: AiRunRequest): Promise<string> => ipcRenderer.invoke("ai:start", request),
+    cancel: (runId: string): Promise<void> => ipcRenderer.invoke("ai:cancel", runId),
+    /**
+     * Subscribes to a run's events and answers its log tool calls. Returns the
+     * unsubscribe function.
+     */
+    listen: (
+      onEvent: (event: AiEvent) => void,
+      onToolCall: (call: { runId: string; name: string; input: unknown }) => string
+    ): (() => void) => {
+      const eventListener = (_event: IpcRendererEvent, payload: AiEvent) => onEvent(payload);
+      const callListener = (
+        _event: IpcRendererEvent,
+        payload: { runId: string; callId: string; name: string; input: unknown }
+      ) => {
+        let result: string;
+        try {
+          result = onToolCall(payload);
+        } catch (error) {
+          result = `Error: ${error instanceof Error ? error.message : String(error)}`;
+        }
+        ipcRenderer.send("ai:tool-result", { callId: payload.callId, result });
+      };
+      ipcRenderer.on("ai:event", eventListener);
+      ipcRenderer.on("ai:tool-call", callListener);
+      return () => {
+        ipcRenderer.off("ai:event", eventListener);
+        ipcRenderer.off("ai:tool-call", callListener);
+      };
+    }
   },
   ssh: {
     readFile: (target: SSHTarget, filePath: string): Promise<string> =>

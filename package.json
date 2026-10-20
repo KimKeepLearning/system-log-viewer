@@ -34,6 +34,7 @@
     "publish:linux": "electron-forge publish --platform=linux --arch=x64"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.135.0",
     "@electron-toolkit/preload": "^3.0.1",
     "@electron-toolkit/utils": "^4.0.0",
     "adm-zip": "^0.5.16",

@@ -7,7 +7,10 @@ import { LogFieldsDialog } from "@renderer/components/log-fields-dialog";
 import { BookmarksDialog } from "@renderer/components/bookmarks-dialog";
 import { useSelectFile } from "@renderer/hooks/use-select-file";
 import { useEasterEgg } from "@renderer/hooks/use-easter-egg";
-import { Loader2 } from "lucide-react";
+import { Loader2, Sparkles } from "lucide-react";
+import { useAtom } from "jotai";
+import { aiPanelOpenAtom } from "@renderer/lib/atom";
+import { cn } from "@renderer/lib/utils";
 
 export const Route = createFileRoute("/dashboard")({
   component: RouteComponent
@@ -16,6 +19,7 @@ export const Route = createFileRoute("/dashboard")({
 function RouteComponent() {
   const { handleUploadClick, isProcessing, progressStatus } = useSelectFile();
   const { handleLogoClick } = useEasterEgg();
+  const [aiPanelOpen, setAiPanelOpen] = useAtom(aiPanelOpenAtom);
 
   return (
     <div className="w-screen h-screen bg-fill-background-surface-l1 scrollbar-container flex flex-col overflow-hidden">
@@ -32,6 +36,17 @@ function RouteComponent() {
 
         <div className="flex-1" />
 
+        <button
+          type="button"
+          onClick={() => setAiPanelOpen(!aiPanelOpen)}
+          className={cn(
+            "h-6 px-2 rounded-md text-xs font-medium inline-flex items-center gap-1.5 transition-colors",
+            aiPanelOpen ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted"
+          )}
+        >
+          <Sparkles className="size-3.5" />
+          Ask Claude
+        </button>
         <BookmarksDialog />
         <LogFieldsDialog />
         <ScreenshotViewer />
