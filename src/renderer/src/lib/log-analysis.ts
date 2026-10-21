@@ -174,6 +174,8 @@ export interface TimelineEvent {
   /** "lifecycle" is what the machine was doing; "problem" is what went wrong. */
   kind: "lifecycle" | "problem";
   severity: "critical" | "warning" | "info";
+  /** The line that announced it, so a click lands on that line and not merely near its time. */
+  log?: AnalyzedLog;
 }
 
 /**
@@ -224,7 +226,7 @@ export const lifecycleEvents = (logs: AnalyzedLog[]): TimelineEvent[] => {
 
       lastSeen.set(label, log.ts);
       seenCount.set(label, count + 1);
-      events.push({ ts: log.ts, label, kind: "lifecycle", severity: "info" });
+      events.push({ ts: log.ts, label, kind: "lifecycle", severity: "info", log });
       break;
     }
   }
@@ -239,8 +241,7 @@ export const lifecycleEvents = (logs: AnalyzedLog[]): TimelineEvent[] => {
 export const timelineEvents = (
   sessions: BootSession[],
   findings: Finding[],
-  lifecycle: TimelineEvent[] = [],
-  capturedAt: number | null = null
+  lifecycle: TimelineEvent[] = []
 ): TimelineEvent[] => {
   const events: TimelineEvent[] = sessions.map((session, index) => ({
     ts: session.startTs,
@@ -250,15 +251,6 @@ export const timelineEvents = (
   }));
 
   events.push(...lifecycle);
-
-  if (capturedAt !== null) {
-    events.push({
-      ts: capturedAt,
-      label: "report sent",
-      kind: "lifecycle",
-      severity: "info"
-    });
-  }
 
   for (const finding of findings) {
     if (finding.rule.severity === "info") continue;
@@ -274,13 +266,7 @@ export const timelineEvents = (
   // Trim by importance, not by time: a chatty lifecycle label must never push a
   // failure off the axis. Only then sort back into chronological order.
   const weight = (event: TimelineEvent) =>
-    event.kind === "problem"
-      ? 0
-      : event.label === "report sent"
-        ? 1
-        : event.label.startsWith("boot")
-          ? 2
-          : 3;
+    event.kind === "problem" ? 0 : event.label.startsWith("boot") ? 1 : 2;
 
   return [...events]
     .sort((a, b) => weight(a) - weight(b))

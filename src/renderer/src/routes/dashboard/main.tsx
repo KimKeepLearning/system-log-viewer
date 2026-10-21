@@ -13,18 +13,22 @@ import {
   timeRangeAtom,
   aiMarksAtom,
   aiPanelOpenAtom,
-  sectionFilterAtom
+  sectionFilterAtom,
+  sectionMapsAtom
 } from "@renderer/lib/atom";
 import { extractLogSection, parseDeviceInfo } from "@renderer/lib/log-parser";
 import { hierarchyKindOf } from "@renderer/lib/ui-hierarchy";
 import { highlightPatterns, parseQuery } from "@renderer/lib/log-query";
 import { looksLikeHistograms } from "@renderer/lib/log-histograms";
 import { sectionNameOf } from "@renderer/lib/log-domains";
+import { vmlogSeries } from "@renderer/lib/log-memory";
+import { bookmarksAtom } from "@renderer/lib/bookmarks";
+import { findCrashes } from "@renderer/lib/log-crashes";
 import {
-  captureTime,
   detectBootSessions,
   lifecycleEvents,
-  timelineEvents
+  timelineEvents,
+  type TimelineEvent
 } from "@renderer/lib/log-analysis";
 import { runRules } from "@renderer/lib/log-rules";
 import { useRef, useState, useEffect, useCallback, useMemo } from "react";
@@ -44,7 +48,7 @@ import { useLogFilter } from "./hooks/use-log-filter";
 import { useMcpBridge } from "./hooks/use-mcp-bridge";
 import { FileSidebar } from "./components/file-sidebar";
 import { FilterBar } from "./components/filter-bar";
-import { TimelineStrip } from "./components/timeline-strip";
+import { TimelineStrip, type TimelineMark } from "./components/timeline-strip";
 import { SearchResultsPanel } from "./components/search-results-panel";
 import { LogList } from "./components/log-list";
 import { CompareView } from "./components/compare-view";
@@ -158,12 +162,26 @@ function RouteComponent() {
   );
   // Boots and the first occurrence of each consequential finding, marked on
   // the strip so the shape of the session is readable at a glance.
+  const sectionMaps = useAtomValue(sectionMapsAtom);
+  const bootSessions = useMemo(() => detectBootSessions(allLogs), [allLogs]);
   const events = useMemo(() => {
-    const file = logFiles.find((entry) => entry.name === selectedFileName);
-    const capturedAt = file ? captureTime(extractLogSection(file.content, "LOGDATE")) : null;
-    const sessions = detectBootSessions(allLogs);
-    return timelineEvents(sessions, runRules(allLogs), lifecycleEvents(allLogs), capturedAt);
-  }, [allLogs, logFiles, selectedFileName]);
+    // Each crash gets its own mark: a rule marks only its first hit, and the
+    // second crash is often the one that matters.
+    const crashes = findCrashes(allLogs, sectionMaps[selectedFileName ?? ""] ?? new Map())
+      .filter((crash) => crash.ts !== null)
+      .slice(0, 20)
+      .map((crash) => ({
+        ts: crash.ts as number,
+        label: crash.title,
+        kind: "problem" as const,
+        severity: "critical" as const,
+        log: crash.logIndex !== undefined ? allLogs[crash.logIndex] : undefined
+      }));
+    return [
+      ...timelineEvents(bootSessions, runRules(allLogs), lifecycleEvents(allLogs)),
+      ...crashes
+    ].sort((a, b) => a.ts - b.ts);
+  }, [allLogs, bootSessions, selectedFileName, sectionMaps]);
 
   const tagNames = useMemo(() => tagFacets.map((tag) => tag.name), [tagFacets]);
 
@@ -360,10 +378,33 @@ function RouteComponent() {
   // Merged rows are in time order, so the first row at or after the moment is
   // the answer. Sequential rows are grouped by section; there the section being
   // read is searched first, and the whole file only if it does not cover the moment.
+  // With a section (its lane was clicked), the nearest line of that section
+  // wins wherever it sits.
   const jumpToTime = useCallback(
-    (ts: number) => {
+    (ts: number, section?: string) => {
       let index = -1;
-      if (isMergedView) {
+      const closest = (accept: (log: ExtendedLog) => boolean) => {
+        let best = -1;
+        let bestDistance = Infinity;
+        let first = Infinity;
+        let last = -Infinity;
+        for (let i = 0; i < visibleLogs.length; i++) {
+          const log = visibleLogs[i];
+          if (log.tsKind !== "wall" || typeof log.ts !== "number" || !accept(log)) continue;
+          first = Math.min(first, log.ts);
+          last = Math.max(last, log.ts);
+          const distance = Math.abs(log.ts - ts);
+          if (distance < bestDistance) {
+            bestDistance = distance;
+            best = i;
+          }
+        }
+        return { best, covers: ts >= first && ts <= last };
+      };
+
+      if (section) {
+        index = closest((log) => log.sourceFile === section).best;
+      } else if (isMergedView) {
         let low = 0;
         let high = visibleLogs.length;
         while (low < high) {
@@ -373,24 +414,6 @@ function RouteComponent() {
         }
         index = Math.min(low, visibleLogs.length - 1);
       } else {
-        const closest = (accept: (log: ExtendedLog) => boolean) => {
-          let best = -1;
-          let bestDistance = Infinity;
-          let first = Infinity;
-          let last = -Infinity;
-          for (let i = 0; i < visibleLogs.length; i++) {
-            const log = visibleLogs[i];
-            if (log.tsKind !== "wall" || typeof log.ts !== "number" || !accept(log)) continue;
-            first = Math.min(first, log.ts);
-            last = Math.max(last, log.ts);
-            const distance = Math.abs(log.ts - ts);
-            if (distance < bestDistance) {
-              bestDistance = distance;
-              best = i;
-            }
-          }
-          return { best, covers: ts >= first && ts <= last };
-        };
         const inSection = activeFile ? closest((log) => log.sourceFile === activeFile) : null;
         index = inSection?.covers ? inSection.best : closest(() => true).best;
       }
@@ -399,6 +422,102 @@ function RouteComponent() {
       setFlash({ index, token: Date.now() });
     },
     [isMergedView, visibleLogs, activeFile]
+  );
+
+  // In filter mode every visible row is a match; in highlight mode only the
+  // indices the search found.
+  const hitIndices = useMemo(() => {
+    if (parsedQuery.isEmpty) return [];
+    return searchMode === "filter" ? visibleLogs.map((_, index) => index) : matchIndices;
+  }, [parsedQuery, searchMode, visibleLogs, matchIndices]);
+
+  const hitTimes = useMemo(() => {
+    const times: number[] = [];
+    for (const index of hitIndices) {
+      const log = visibleLogs[index];
+      if (log.tsKind === "wall" && typeof log.ts === "number") times.push(log.ts);
+    }
+    return times;
+  }, [hitIndices, visibleLogs]);
+
+  const jumpToHit = useCallback(
+    (ts: number) => {
+      let best = -1;
+      let bestDistance = Infinity;
+      for (const index of hitIndices) {
+        const log = visibleLogs[index];
+        if (log.tsKind !== "wall" || typeof log.ts !== "number") continue;
+        const distance = Math.abs(log.ts - ts);
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          best = index;
+        }
+      }
+      if (best < 0) return;
+      virtuosoRef.current?.scrollToIndex({ index: best, align: "center" });
+      setFlash({ index: best, token: Date.now() });
+    },
+    [hitIndices, visibleLogs]
+  );
+
+  const bookmarks = useAtomValue(bookmarksAtom);
+  const timelineMarks = useMemo(() => {
+    const result: TimelineMark[] = [];
+    for (const mark of aiMarks) {
+      const raw = parsedLogs[mark.key]?.[mark.index];
+      if (raw?.tsKind !== "wall" || typeof raw.ts !== "number") continue;
+      result.push({
+        ts: raw.ts,
+        kind: mark.kind,
+        label: mark.note || raw.message,
+        onSelect: () => jumpToLine(mark.key, mark.index)
+      });
+    }
+    for (const bookmark of bookmarks) {
+      if (bookmark.ts === null || !bookmark.sourceFile.startsWith(`${selectedFileName}::`))
+        continue;
+      result.push({
+        ts: bookmark.ts,
+        kind: "bookmark",
+        label: bookmark.note || bookmark.message,
+        onSelect: () =>
+          jumpTo(
+            bookmark.sourceFile,
+            (log) =>
+              log.sourceFile === bookmark.sourceFile &&
+              log.message === bookmark.message &&
+              (log.ts ?? null) === bookmark.ts
+          )
+      });
+    }
+    return result;
+  }, [aiMarks, bookmarks, parsedLogs, selectedFileName, jumpTo, jumpToLine]);
+
+  const resourceSeries = useMemo(() => {
+    const sections = sectionMaps[selectedFileName ?? ""];
+    if (!sections) return null;
+    let reference = 0;
+    for (const log of allLogs) {
+      if (log.tsKind === "wall" && typeof log.ts === "number" && log.ts > reference) {
+        reference = log.ts;
+      }
+    }
+    return reference > 0 ? vmlogSeries(sections, reference) : null;
+  }, [sectionMaps, selectedFileName, allLogs]);
+
+  const pinnedSectionSet = useAtomValue(sectionFilterAtom);
+  const pinnedSections = useMemo(() => [...pinnedSectionSet], [pinnedSectionSet]);
+
+  const selectEvent = useCallback(
+    (event: TimelineEvent) => {
+      const line = event.log as ExtendedLog | undefined;
+      if (line) {
+        jumpTo(line.sourceFile, (row) => row === line);
+        return;
+      }
+      jumpToTime(event.ts);
+    },
+    [jumpTo, jumpToTime]
   );
 
   const marksByLine = useMemo(() => {
@@ -579,7 +698,18 @@ function RouteComponent() {
                   onToggleMerge={() => setIsMergedView((merged) => !merged)}
                 />
 
-                <TimelineStrip logs={allLogs} events={events} onJumpToTime={jumpToTime} />
+                <TimelineStrip
+                  logs={allLogs}
+                  events={events}
+                  sessions={bootSessions}
+                  hits={hitTimes}
+                  marks={timelineMarks}
+                  resource={resourceSeries}
+                  pinnedSections={pinnedSections}
+                  onJumpToTime={jumpToTime}
+                  onJumpToHit={jumpToHit}
+                  onSelectEvent={selectEvent}
+                />
 
                 {/* Filters only: Merge is a view mode and sits with the view
                     switch, so this line never has to wrap. */}
