@@ -2,6 +2,7 @@
 import { IUserLog } from "@renderer/lib/typings";
 import { cn } from "@renderer/lib/utils";
 import { HighlightedText } from "@renderer/components/highlighted-text";
+import { RedactedText } from "@renderer/components/redacted-text";
 import { getLevelColor } from "@renderer/lib/log-utils";
 
 interface LogRowProps {
@@ -60,7 +61,7 @@ export const LogRow = ({ log, isMain = true, patterns = NO_PATTERNS, children }:
         )}
         <span data-log-field="message" className="text-text-primary font-medium select-text">
           <b>
-            <HighlightedText text={log.message} patterns={patterns} />
+            <RedactedText text={log.message} patterns={patterns} />
           </b>
         </span>
         {log.truncated && (

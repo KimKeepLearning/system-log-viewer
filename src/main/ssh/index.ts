@@ -1,4 +1,6 @@
 import { ipcMain } from "electron";
+import * as path from "path";
+import { extractLogBuffer } from "../archive";
 import {
   collect,
   disconnect,
@@ -12,16 +14,20 @@ import {
 export type { ExecResult, FollowStatus, SSHTarget } from "./client";
 
 export const registerSSHHandlers = (): void => {
-  ipcMain.handle("ssh:read-file", (_event, target: SSHTarget, filePath: string) =>
-    readRemoteFile(target, filePath)
+  // Pulled files go through the same extraction as dropped ones, so a remote
+  // .tgz or rotated .gz opens like a local one.
+  ipcMain.handle("ssh:read-file", async (_event, target: SSHTarget, filePath: string) =>
+    extractLogBuffer(path.posix.basename(filePath), await readRemoteFile(target, filePath))
   );
 
   ipcMain.handle("ssh:exec", (_event, target: SSHTarget, command: string) =>
     execCommand(target, command)
   );
 
-  ipcMain.handle("ssh:collect", (_event, target: SSHTarget, command: string, remotePath: string) =>
-    collect(target, command, remotePath)
+  ipcMain.handle(
+    "ssh:collect",
+    async (_event, target: SSHTarget, command: string, remotePath: string) =>
+      extractLogBuffer(path.posix.basename(remotePath), await collect(target, command, remotePath))
   );
 
   ipcMain.handle("ssh:follow-start", (event, id: string, target: SSHTarget, command: string) => {

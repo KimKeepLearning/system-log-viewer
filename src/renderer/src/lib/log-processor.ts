@@ -1,6 +1,6 @@
 import { LogFileContext, IUserLog, SectionStats } from "./typings";
 import { parseLogLine, extractSectionsRawAsync } from "./log-parser";
-import { deriveBootAnchor } from "./log-time";
+import { deriveBootAnchor, resolveYearless } from "./log-time";
 
 export interface ProcessedLogData {
   parsedLogs: Record<string, IUserLog[]>;
@@ -106,7 +106,10 @@ function anchorMonotonicLogs(
   sectionKeys: string[],
   rawSections: { key: string; rawContent: string }[]
 ): void {
-  const syslog = rawSections.find((section) => section.key === "syslog");
+  // "messages" is the same file under its own name, in a /var/log tarball.
+  const syslog = rawSections.find(
+    (section) => section.key === "syslog" || section.key === "messages"
+  );
   if (!syslog) return;
 
   const anchor = deriveBootAnchor(syslog.rawContent);
@@ -116,6 +119,32 @@ function anchorMonotonicLogs(
     for (const log of parsedLogs[key] ?? []) {
       if (log.tsKind === "monotonic" && log.ts !== null && log.ts !== undefined) {
         log.ts += anchor.bootEpochUs;
+        log.tsKind = "wall";
+      }
+    }
+  }
+}
+
+/** Gives logcat-style stamps the year of the newest wall-clock time in the file. */
+function resolveYearlessLogs(parsedLogs: Record<string, IUserLog[]>, sectionKeys: string[]): void {
+  let reference: number | null = null;
+  for (const key of sectionKeys) {
+    for (const log of parsedLogs[key] ?? []) {
+      if (
+        log.tsKind === "wall" &&
+        typeof log.ts === "number" &&
+        (reference === null || log.ts > reference)
+      ) {
+        reference = log.ts;
+      }
+    }
+  }
+  if (reference === null) return;
+
+  for (const key of sectionKeys) {
+    for (const log of parsedLogs[key] ?? []) {
+      if (log.tsKind === "yearless" && typeof log.ts === "number") {
+        log.ts = resolveYearless(log.ts, reference);
         log.tsKind = "wall";
       }
     }
@@ -196,6 +225,7 @@ export async function processFilesAsync(
       // Stats are taken after anchoring so the kernel sections report the wall
       // clock range the timeline will actually place them at.
       anchorMonotonicLogs(parsedLogs, sections, rawSections);
+      resolveYearlessLogs(parsedLogs, sections);
       for (const key of sections) sectionStats[key] = summarize(parsedLogs[key]);
     } else if (file.content.trim().length > 0) {
       // Fallback: Line-by-line parsing
@@ -213,6 +243,7 @@ export async function processFilesAsync(
         markIfCutOff(logs);
         parsedLogs[uniqueKey] = logs;
         sections.push(uniqueKey);
+        resolveYearlessLogs(parsedLogs, sections);
         sectionStats[uniqueKey] = summarize(logs);
       }
     }

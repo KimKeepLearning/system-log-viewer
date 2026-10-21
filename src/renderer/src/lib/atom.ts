@@ -1,6 +1,7 @@
 import { atom } from "jotai";
 import { DeviceInfo, IUserLog, LogFileContext, SectionStats } from "./typings";
 import { parseDeviceInfo } from "./log-parser";
+import { buildSectionMap, SectionMap } from "./log-sections";
 import type { ArchiveSummary } from "./log-diff";
 import type { AiMark } from "./ai-tools";
 
@@ -21,6 +22,15 @@ export const baseDeviceInfoAtom = atom<DeviceInfo>((get) => {
 export const screenshotsAtom = atom((get) =>
   get(logFilesAtom).filter((file) => Boolean(file.imageDataUrl))
 );
+
+/** Raw section text per file, for the parsers that read sections as tables. */
+export const sectionMapsAtom = atom<Record<string, SectionMap>>((get) => {
+  const maps: Record<string, SectionMap> = {};
+  for (const file of get(logFilesAtom)) {
+    if (!file.imageDataUrl) maps[file.name] = buildSectionMap(file.content);
+  }
+  return maps;
+});
 
 // A map of all parsed logs, keyed by "FileName::SectionName"
 // Now a state atom, set by loadLogFilesAtom
@@ -97,6 +107,9 @@ export const timeRangeAtom = atom<{ from: number; to: number } | null>(null);
  * of the list because the strip is its sibling, not its child.
  */
 export const selectedTimeAtom = atom<number | null>(null);
+
+/** The wall-clock span of the rows on screen, drawn on the timeline as "you are here". */
+export const viewportTimeAtom = atom<{ from: number; to: number } | null>(null);
 
 export const sectionStatsAtom = atom<Record<string, SectionStats>>({});
 

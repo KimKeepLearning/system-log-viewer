@@ -108,7 +108,7 @@ export const disconnect = async (target: SSHTarget): Promise<void> => {
   }
 };
 
-export const readRemoteFile = async (target: SSHTarget, filePath: string): Promise<string> => {
+export const readRemoteFile = async (target: SSHTarget, filePath: string): Promise<Buffer> => {
   const conn = await connect(target);
 
   return new Promise((resolve, reject) => {
@@ -121,7 +121,7 @@ export const readRemoteFile = async (target: SSHTarget, filePath: string): Promi
       stream.on("data", (chunk: Buffer | string) => {
         chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
       });
-      stream.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+      stream.on("end", () => resolve(Buffer.concat(chunks)));
       stream.on("error", reject);
     });
   });
@@ -158,7 +158,7 @@ export const collect = async (
   target: SSHTarget,
   command: string,
   remotePath: string
-): Promise<string> => {
+): Promise<Buffer> => {
   const result = await execCommand(target, command);
   if (result.code !== 0 && result.code !== null) {
     throw new Error(`Command exited with ${result.code}: ${result.stderr || result.stdout}`);

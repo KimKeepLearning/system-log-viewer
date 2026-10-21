@@ -47,7 +47,7 @@ export const useSelectFile = () => {
   const handleUploadClick = () => {
     const input = document.createElement("input");
     input.type = "file";
-    input.accept = ".txt,.log,.zip";
+    input.accept = ".txt,.log,.zip,.tgz,.gz,.tar";
     input.multiple = true;
     input.onchange = (e) => {
       const files = (e.target as HTMLInputElement).files;

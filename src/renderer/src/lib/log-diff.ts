@@ -2,6 +2,8 @@ import { IUserLog, LogFileContext } from "./typings";
 import { clusterMessages } from "./log-analysis";
 import { sectionNameOf } from "./log-domains";
 import { extractSingleLineFields } from "./log-parser";
+import { deviceCards } from "./log-device";
+import { buildSectionMap } from "./log-sections";
 import { AnalyzedLog, RuleSeverity, runRules } from "./log-rules";
 
 /** Enough to find a line again in the open log: its section and its text. */
@@ -53,6 +55,12 @@ export const summariseArchive = (
     if (file.imageDataUrl) continue;
     for (const field of extractSingleLineFields(file.content)) {
       if (!(field.key in fields)) fields[field.key] = field.value;
+    }
+    // Hardware lives in sections, not fields; "same build, different USB
+    // devices" is often the whole answer when two units behave differently.
+    for (const card of deviceCards(file.content, buildSectionMap(file.content))) {
+      const key = `device: ${card.title}`;
+      if (card.section && !(key in fields)) fields[key] = card.lines.join(" | ");
     }
   }
 

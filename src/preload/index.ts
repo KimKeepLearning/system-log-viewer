@@ -97,11 +97,15 @@ const api = {
     }
   },
   ssh: {
-    readFile: (target: SSHTarget, filePath: string): Promise<string> =>
+    readFile: (target: SSHTarget, filePath: string): Promise<ExtractedLogFile[]> =>
       ipcRenderer.invoke("ssh:read-file", target, filePath),
     exec: (target: SSHTarget, command: string): Promise<ExecResult> =>
       ipcRenderer.invoke("ssh:exec", target, command),
-    collect: (target: SSHTarget, command: string, remotePath: string): Promise<string> =>
+    collect: (
+      target: SSHTarget,
+      command: string,
+      remotePath: string
+    ): Promise<ExtractedLogFile[]> =>
       ipcRenderer.invoke("ssh:collect", target, command, remotePath),
     disconnect: (target: SSHTarget): Promise<void> => ipcRenderer.invoke("ssh:disconnect", target),
     /** Streams a `-f` style command until the returned function is called. */

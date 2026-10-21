@@ -80,7 +80,8 @@ describe("parseLogLine", () => {
 
     expect(log.level).toBe("ERROR");
     expect(log.process).toBe("chrome[1016]");
-    expect(log.source).toBe("USB: usb_service_linux.cc:255");
+    expect(log.source).toBe("usb_service_linux.cc:255");
+    expect(log.tag).toBe("USB");
     expect(log.message).toBe("Failed to open device");
     // -07:00, so the instant is seven hours after the same digits in UTC.
     expect(log.ts).toBe(Date.parse("2026-08-31T06:17:31Z") * 1000 + 303993);

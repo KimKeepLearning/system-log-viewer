@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAtom, useAtomValue } from "jotai";
 import { Check, ChevronDown, ChevronRight, Search, X } from "lucide-react";
 import { cn } from "@renderer/lib/utils";
@@ -62,6 +62,7 @@ const SectionRow = ({
 
   return (
     <div
+      data-section-key={entry.key}
       className={cn(
         "group flex items-center gap-1.5 rounded px-1.5 py-1 cursor-pointer transition-colors",
         isActive ? "bg-primary/10 text-primary" : "hover:bg-muted/60",
@@ -126,6 +127,7 @@ export const FileSidebar = ({
   const [query, setQuery] = useState("");
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [hideEmpty, setHideEmpty] = useState(false);
+  const listRef = useRef<HTMLDivElement>(null);
 
   const grouped = useMemo(() => {
     const keys = selectedFileName ? (logStructure[selectedFileName] ?? []) : [];
@@ -152,6 +154,21 @@ export const FileSidebar = ({
       entries: byDomain.get(domain)!.sort((a, b) => a.name.localeCompare(b.name))
     }));
   }, [logStructure, selectedFileName, stats, query, hideEmpty]);
+
+  // Follows the log: wherever the list scrolls or jumps to, its section is
+  // brought into view here. A collapsed domain stays collapsed; its header is
+  // shown instead.
+  useEffect(() => {
+    const list = listRef.current;
+    if (!list || !activeFile) return;
+    const row = list.querySelector<HTMLElement>(`[data-section-key="${CSS.escape(activeFile)}"]`);
+    const target =
+      row ??
+      list.querySelector<HTMLElement>(
+        `[data-domain="${CSS.escape(classifySection(sectionNameOf(activeFile)))}"]`
+      );
+    target?.scrollIntoView({ block: "nearest" });
+  }, [activeFile, grouped]);
 
   const totalShown = grouped.reduce((sum, group) => sum + group.entries.length, 0);
   const fileLabels = useMemo(() => shortFileLabels(files), [files]);
@@ -240,7 +257,7 @@ export const FileSidebar = ({
       </div>
 
       <ScrollArea className="flex-1 min-h-0 scrollbar-container">
-        <div className="p-1.5 flex flex-col gap-1">
+        <div ref={listRef} className="p-1.5 flex flex-col gap-1">
           {tags.length > 0 && (
             <div>
               <button
@@ -313,6 +330,7 @@ export const FileSidebar = ({
               <div key={group.domain}>
                 <button
                   type="button"
+                  data-domain={group.domain}
                   onClick={() => {
                     const next = new Set(collapsed);
                     if (next.has(group.domain)) next.delete(group.domain);

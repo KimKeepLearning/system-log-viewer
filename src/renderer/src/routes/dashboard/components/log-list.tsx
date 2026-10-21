@@ -21,7 +21,7 @@ import {
 import { buildLogText, countLogLines } from "@renderer/lib/log-utils";
 import { sectionNameOf } from "@renderer/lib/log-domains";
 import { bookmarkKey, bookmarkKeysAtom, toggleBookmarkAtom } from "@renderer/lib/bookmarks";
-import { selectedTimeAtom } from "@renderer/lib/atom";
+import { selectedTimeAtom, viewportTimeAtom } from "@renderer/lib/atom";
 import { AI_MARK_STYLE, AiMark } from "@renderer/lib/ai-tools";
 import { IUserLog } from "@renderer/lib/typings";
 import { useAtomValue, useSetAtom } from "jotai";
@@ -72,6 +72,7 @@ export const LogList = ({
   const bookmarkKeys = useAtomValue(bookmarkKeysAtom);
   const toggleBookmark = useSetAtom(toggleBookmarkAtom);
   const setSelectedTime = useSetAtom(selectedTimeAtom);
+  const setViewportTime = useSetAtom(viewportTimeAtom);
 
   // Selecting a row also points the timeline at it, so "where am I in the
   // session" is answered without reading a timestamp.
@@ -215,8 +216,25 @@ export const LogList = ({
           <Virtuoso
             ref={virtuosoRef}
             data={logs}
-            rangeChanged={({ startIndex }) => {
-              const log = logs[startIndex];
+            rangeChanged={({ startIndex, endIndex }) => {
+              // A line jump centres its target, so the row on top belongs to
+              // whatever came before it; the flashed row is the one being read.
+              const index =
+                flash && flash.index >= startIndex && flash.index <= endIndex
+                  ? flash.index
+                  : startIndex;
+              const log = logs[index];
+
+              let from = Infinity;
+              let to = -Infinity;
+              for (let row = startIndex; row <= endIndex; row++) {
+                const ts = logs[row]?.ts;
+                if (typeof ts !== "number" || logs[row].tsKind !== "wall") continue;
+                if (ts < from) from = ts;
+                if (ts > to) to = ts;
+              }
+              setViewportTime(from <= to ? { from, to } : null);
+
               if (log && log.sourceFile !== activeFile) {
                 onActiveFileChange(log.sourceFile);
               }

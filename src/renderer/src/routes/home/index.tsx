@@ -113,7 +113,11 @@ function RouteComponent() {
             <p className="text-muted-foreground">Upload and view system logs</p>
           </div>
 
-          <FileDropZone onFileSelect={handleFileSelect} accept=".txt,.log,.zip" multiple={true} />
+          <FileDropZone
+            onFileSelect={handleFileSelect}
+            accept=".txt,.log,.zip,.tgz,.gz,.tar"
+            multiple={true}
+          />
 
           <div className="flex items-center justify-center gap-2">
             <span className="text-sm text-muted-foreground">or</span>

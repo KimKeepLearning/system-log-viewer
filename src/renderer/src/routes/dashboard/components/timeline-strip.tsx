@@ -2,7 +2,8 @@ import { useMemo, useRef, useState } from "react";
 import { useAtom, useAtomValue } from "jotai";
 import { X } from "lucide-react";
 import { cn } from "@renderer/lib/utils";
-import { selectedTimeAtom, timeRangeAtom } from "@renderer/lib/atom";
+import { selectedTimeAtom, timeRangeAtom, viewportTimeAtom } from "@renderer/lib/atom";
+import { sectionNameOf } from "@renderer/lib/log-domains";
 import { TimelineEvent } from "@renderer/lib/log-analysis";
 import { ExtendedLog } from "../types";
 
@@ -12,7 +13,12 @@ interface Bucket {
   total: number;
   errors: number;
   warnings: number;
+  /** Lines per section, for the hover card's "mostly from". */
+  sections: Map<string, number>;
 }
+
+// Below this many pixels of travel a press is a click (jump), not a drag (zoom).
+const CLICK_SLOP_PX = 4;
 
 const MICROS_PER_DAY = 86_400 * 1_000_000;
 
@@ -60,20 +66,25 @@ const EVENT_COLOR: Record<TimelineEvent["severity"], string> = {
 /**
  * An incident usually shows up as a spike in how much the machine had to say,
  * so plotting volume over time turns "when did this happen" into something you
- * can see rather than scroll for. Dragging across it narrows the log to that
- * window and rescales the strip to it.
+ * can see rather than scroll for. Clicking jumps the log to that moment;
+ * dragging narrows the log to a window and rescales the strip to it. The band
+ * shows which stretch of time is on screen, so the strip doubles as a map of
+ * where you are.
  */
 export const TimelineStrip = ({
   logs,
-  events = []
+  events = [],
+  onJumpToTime
 }: {
   logs: ExtendedLog[];
   events?: TimelineEvent[];
+  onJumpToTime?: (ts: number) => void;
 }) => {
   const [timeRange, setTimeRange] = useAtom(timeRangeAtom);
   const selectedTime = useAtomValue(selectedTimeAtom);
+  const viewport = useAtomValue(viewportTimeAtom);
   const trackRef = useRef<HTMLDivElement>(null);
-  const [drag, setDrag] = useState<{ from: number; to: number } | null>(null);
+  const [drag, setDrag] = useState<{ from: number; to: number; startX: number } | null>(null);
   const [hover, setHover] = useState<number | null>(null);
 
   // Counts come from the unfiltered set, so the shape does not move while you
@@ -100,7 +111,8 @@ export const TimelineStrip = ({
     const buckets: Bucket[] = Array.from({ length: BUCKET_COUNT }, () => ({
       total: 0,
       errors: 0,
-      warnings: 0
+      warnings: 0,
+      sections: new Map<string, number>()
     }));
 
     for (const log of logs) {
@@ -110,16 +122,21 @@ export const TimelineStrip = ({
       bucket.total++;
       if (log.level === "ERROR") bucket.errors++;
       else if (log.level === "WARN") bucket.warnings++;
+      bucket.sections.set(log.sourceFile, (bucket.sections.get(log.sourceFile) ?? 0) + 1);
     }
 
     const days = dayBoundaries(min, max);
     const peak = Math.max(...buckets.map((bucket) => bucket.total));
+    const peakErrors = Math.max(...buckets.map((bucket) => bucket.errors));
+    const peakWarnings = Math.max(...buckets.map((bucket) => bucket.warnings));
     return {
       min,
       max,
       span,
       buckets,
       peak: peak === 0 ? 1 : peak,
+      peakErrors,
+      peakWarnings,
       days,
       multiDay: days.length > 0,
       // Label every nth boundary so the dates stay readable on a long log.
@@ -160,6 +177,25 @@ export const TimelineStrip = ({
     ? Math.max(0.4, ratioOf(Math.max(drag.from, drag.to)) - selectionLeft)
     : 0;
 
+  const hoverBucket = (() => {
+    if (hover === null) return null;
+    const index = Math.min(
+      BUCKET_COUNT - 1,
+      Math.floor(((hover - model.min) / model.span) * BUCKET_COUNT)
+    );
+    const bucket = model.buckets[index];
+    if (!bucket) return null;
+    const from = model.min + (index / BUCKET_COUNT) * model.span;
+    const to = model.min + ((index + 1) / BUCKET_COUNT) * model.span;
+    return {
+      bucket,
+      from,
+      to,
+      topSections: [...bucket.sections.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3),
+      events: events.filter((event) => event.ts >= from && event.ts < to).slice(0, 4)
+    };
+  })();
+
   return (
     <div className="flex items-stretch gap-2 px-2 py-1 border-b bg-background select-none">
       <div className="flex-1 min-w-0">
@@ -169,24 +205,31 @@ export const TimelineStrip = ({
           onPointerDown={(event) => {
             event.currentTarget.setPointerCapture(event.pointerId);
             const at = timeAt(event.clientX);
-            setDrag({ from: at, to: at });
+            setDrag({ from: at, to: at, startX: event.clientX });
           }}
           onPointerMove={(event) => {
             setHover(timeAt(event.clientX));
             if (drag) setDrag({ ...drag, to: timeAt(event.clientX) });
           }}
           onPointerLeave={() => setHover(null)}
-          onPointerUp={() => {
+          onPointerUp={(event) => {
             if (!drag) return;
-            const from = Math.min(drag.from, drag.to);
-            const to = Math.max(drag.from, drag.to);
-            // A plain click is a clear, not a zero-width window nothing matches.
-            setTimeRange(to - from < model.span / 500 ? null : { from, to });
+            if (Math.abs(event.clientX - drag.startX) < CLICK_SLOP_PX) {
+              onJumpToTime?.(drag.from);
+            } else {
+              setTimeRange({
+                from: Math.min(drag.from, drag.to),
+                to: Math.max(drag.from, drag.to)
+              });
+            }
             setDrag(null);
           }}
+          onDoubleClick={() => setTimeRange(null)}
         >
           {model.buckets.map((bucket, index) => {
-            const height = bucket.total === 0 ? 0 : Math.max(8, (bucket.total / model.peak) * 100);
+            // Square root, so one chatty burst does not flatten every other bar.
+            const height =
+              bucket.total === 0 ? 0 : Math.max(8, Math.sqrt(bucket.total / model.peak) * 100);
             return (
               <div key={index} className="flex-1 h-full flex flex-col justify-end min-w-0">
                 <div
@@ -226,6 +269,55 @@ export const TimelineStrip = ({
             </div>
           ))}
 
+          {viewport && viewport.to >= model.min && viewport.from <= model.max && (
+            <div
+              className="absolute inset-y-0 bg-sky-500/10 border-x border-sky-500/60 pointer-events-none"
+              style={{
+                left: `${Math.max(0, ratioOf(viewport.from))}%`,
+                width: `${Math.max(0.3, Math.min(100, ratioOf(viewport.to)) - Math.max(0, ratioOf(viewport.from)))}%`
+              }}
+              title="On screen in the log"
+            />
+          )}
+
+          {hoverBucket && hover !== null && !drag && (
+            <div
+              className={cn(
+                "absolute top-full mt-1 z-30 w-60 rounded-md border bg-popover text-popover-foreground shadow-md p-2 text-[11px] pointer-events-none",
+                ratioOf(hover) > 70 && "-translate-x-full"
+              )}
+              style={{ left: `${ratioOf(hover)}%` }}
+            >
+              <div className="font-medium tabular-nums">
+                {formatMoment(hoverBucket.from, model.multiDay)} –{" "}
+                {formatMoment(hoverBucket.to, model.multiDay)}
+              </div>
+              <div className="tabular-nums text-muted-foreground">
+                {hoverBucket.bucket.total.toLocaleString()} lines
+                {hoverBucket.bucket.errors > 0 && (
+                  <span className="text-red-500"> · {hoverBucket.bucket.errors} errors</span>
+                )}
+                {hoverBucket.bucket.warnings > 0 && (
+                  <span className="text-amber-600"> · {hoverBucket.bucket.warnings} warnings</span>
+                )}
+              </div>
+              {hoverBucket.topSections.map(([key, count]) => (
+                <div key={key} className="flex gap-2 font-mono text-[10px]">
+                  <span className="truncate flex-1">{sectionNameOf(key)}</span>
+                  <span className="tabular-nums text-muted-foreground">{count}</span>
+                </div>
+              ))}
+              {hoverBucket.events.map((event) => (
+                <div key={`${event.ts}-${event.label}`} className="text-[10px] font-medium">
+                  {formatClock(event.ts)} {event.label}
+                </div>
+              ))}
+              <div className="text-[10px] text-muted-foreground/70 mt-1">
+                click to jump · drag to zoom · double-click to reset
+              </div>
+            </div>
+          )}
+
           {drag && (
             <div
               className="absolute inset-y-0 bg-primary/15 border-x border-primary/70 pointer-events-none"
@@ -244,6 +336,33 @@ export const TimelineStrip = ({
           )}
         </div>
 
+        {/* Errors on a lane of their own, scaled to the busiest error bucket:
+            inside a volume bar they were a sliver whenever the log was chatty. */}
+        {(model.peakErrors > 0 || model.peakWarnings > 0) && (
+          <div
+            className="flex gap-px h-1.5 mt-px"
+            title="Errors (red) and warnings (amber) over time"
+          >
+            {model.buckets.map((bucket, index) => (
+              <div
+                key={index}
+                className={cn(
+                  "flex-1 min-w-0 rounded-[1px]",
+                  bucket.errors > 0 ? "bg-red-500" : bucket.warnings > 0 ? "bg-amber-500" : ""
+                )}
+                style={{
+                  opacity:
+                    bucket.errors > 0
+                      ? 0.25 + 0.75 * Math.sqrt(bucket.errors / model.peakErrors)
+                      : bucket.warnings > 0
+                        ? 0.15 + 0.5 * Math.sqrt(bucket.warnings / model.peakWarnings)
+                        : 0
+                }}
+              />
+            ))}
+          </div>
+        )}
+
         {/* Events get their own lane with their names written out, so the marks
             do not need to be decoded from a key. */}
         {placedEvents.length > 0 && (
@@ -251,7 +370,9 @@ export const TimelineStrip = ({
             {placedEvents.map(({ event, left, showLabel, anchorRight }) => (
               <div
                 key={`${event.ts}-${event.label}`}
-                className="absolute top-0 flex items-center gap-0.5"
+                role="button"
+                onClick={() => onJumpToTime?.(event.ts)}
+                className="absolute top-0 flex items-center gap-0.5 cursor-pointer hover:opacity-70"
                 style={
                   anchorRight
                     ? { right: `${100 - left}%`, flexDirection: "row-reverse" }
@@ -315,7 +436,7 @@ export const TimelineStrip = ({
         ) : (
           // On a single-day log the date appears nowhere else on screen.
           <div className="text-muted-foreground/60 tabular-nums">
-            {model.multiDay ? "UTC · drag to zoom" : `${formatDate(model.min)} UTC`}
+            {model.multiDay ? "UTC · click to jump" : `${formatDate(model.min)} UTC`}
           </div>
         )}
 

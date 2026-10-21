@@ -7,6 +7,7 @@
  * archives; anything unmatched falls into "Other" rather than being hidden.
  */
 export const LOG_DOMAINS = [
+  "Crashes",
   "Chrome & UI",
   "Kernel & Boot",
   "Network",
@@ -26,19 +27,28 @@ export type LogDomain = (typeof LOG_DOMAINS)[number];
 // First match wins, so the more specific patterns come first. Kernel is matched
 // before Processes, for instance, because "threads" would otherwise capture
 // kernel thread sections.
+// The path-like names (chrome/, ui/, power_manager/, ...) are sections of a
+// /var/log tarball, which archive.ts folds into one file.
 const DOMAIN_PATTERNS: [LogDomain, RegExp][] = [
   [
+    "Crashes",
+    /(\.meta$|\.kcrash$|^kernel-crashes|^console-ramoops|_panicinfo$|^i915_error_state|crash\/|Crash Reports|ANR$)/i
+  ],
+  [
     "Chrome & UI",
-    /^(chrome_|ui_log|ui_device_data_manager|UI Hierarchy|extensions|ozone_|virtual_keyboard|input_devices)/i
+    /^(chrome_|chrome\/|chrome$|ui\/|ui_log|ui_device_data_manager|UI Hierarchy|extensions|ozone_|virtual_keyboard|input_devices)/i
   ],
   [
     "Kernel & Boot",
-    /^(dmesg|syslog|upstart|bootstat|interrupts|lsmod|slabinfo|buddyinfo|pagetypeinfo|vmstat|psi_|vmlog|env|audit_log)/i
+    /^(dmesg|syslog|messages|boot\.log|eventlog|upstart|bootstat|interrupts|lsmod|slabinfo|buddyinfo|pagetypeinfo|vmstat|psi_|vmlog|env|audit|secure|metrics\/|clobber)/i
   ],
-  ["Network", /^(netlog|network|ifconfig|routes|iw_list|traffic-counters|tlsdate|mm-|shill)/i],
+  [
+    "Network",
+    /^(netlog|net\.log|network|ifconfig|routes|iw_list|traffic-counters|tlsdate|mm-|shill|wifi_|iwlwifi)/i
+  ],
   ["Audio", /^(cras|alsa|audio_)/i],
-  ["Bluetooth", /^(bluetooth|btmon|floss)/i],
-  ["Power", /^(powerd|power_supply|wakeup_sources|pchg_)/i],
+  ["Bluetooth", /^(bluetooth|btmon|floss|bt_)/i],
+  ["Power", /^(powerd|power_manager|power_supply|wakeup_sources|pchg_)/i],
   ["Graphics", /^(drm_|modetest|framebuffer|edid|mali_|hdmi|synthesize|font_info)/i],
   [
     "Storage & Memory",
@@ -49,7 +59,10 @@ const DOMAIN_PATTERNS: [LogDomain, RegExp][] = [
     /^(bios_|cpuinfo|ec_info|cbi_info|crosid|hardware_class|vpd_|sensor_info|lspci|lsusb|cros_fp|cros_tp|amd_stb|fwupd|hwsec|dbus_|lpstat|mountinfo|android_app_storage)/i
   ],
   ["Processes", /^(ps$|threads|top )/i],
-  ["App logs", /(vibe-service|crosvm|update_engine|device_event_log|system_log_stats|LOGDATE)/i]
+  [
+    "App logs",
+    /(vibe-service|vibe-camerad|VibeAndroidContainer|^vac|apsserver|quickshare|ospserver|synthesize|hdmi-in|crosvm|update_engine|device_event_log|system_log_stats|LOGDATE)/i
+  ]
 ];
 
 const cache = new Map<string, LogDomain>();

@@ -104,9 +104,13 @@ declare global {
         ) => () => void;
       };
       ssh: {
-        readFile: (target: SSHTarget, filePath: string) => Promise<string>;
+        readFile: (target: SSHTarget, filePath: string) => Promise<ExtractedLogFile[]>;
         exec: (target: SSHTarget, command: string) => Promise<SSHExecResult>;
-        collect: (target: SSHTarget, command: string, remotePath: string) => Promise<string>;
+        collect: (
+          target: SSHTarget,
+          command: string,
+          remotePath: string
+        ) => Promise<ExtractedLogFile[]>;
         disconnect: (target: SSHTarget) => Promise<void>;
         follow: (
           id: string,

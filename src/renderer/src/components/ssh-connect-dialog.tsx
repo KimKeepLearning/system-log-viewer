@@ -25,17 +25,44 @@ const FILE_PRESETS = [
   "/var/log/messages",
   "/var/log/ui/ui.LATEST",
   "/var/log/power_manager/powerd.LATEST",
-  "/var/log/net.log"
+  "/var/log/net.log",
+  "/var/log/upstart.log",
+  "/var/log/bluetooth.log",
+  "/var/log/update_engine.log",
+  "/var/log/vmlog/vmlog.LATEST"
 ];
+
+// Printed in the system_logs.txt section format, so each .meta becomes its own
+// section and the overview's crash list reads them.
+const CRASH_META_COMMAND =
+  "for f in /var/spool/crash/*.meta /home/chronos/crash/*.meta /run/daemon-store/crash/*/*.meta; do " +
+  '[ -f "$f" ] || continue; ' +
+  'printf \'%s=<multiline>\\n---------- START ----------\\n\' "$f"; cat "$f"; ' +
+  "printf '\\n---------- END ----------\\n'; done";
+
+// dbus-send wraps the reply in a header line and string "..."; sed peels both.
+const DEBUGD_GET_LOG_COMMAND =
+  "dbus-send --system --print-reply --dest=org.chromium.debugd /org/chromium/debugd " +
+  "org.chromium.debugd.GetLog string:ec_info | sed -e '1d' -e '2s/^ *string \"//' -e '$s/\"$//'";
+
+const LOG_BUNDLE_PATH = "/tmp/system-log-viewer.tgz";
 
 // ChromeOS ships croslog rather than journalctl, and dmesg needs --raw: it
 // keeps the <N> priority and the monotonic stamp the kernel parser reads, where
 // -T rewrites the stamp into a form nothing here understands.
-const COMMAND_PRESETS = [
+const COMMAND_PRESETS: { label: string; command: string; fetchPath?: string }[] = [
   { label: "croslog (this boot)", command: "croslog --boot" },
   { label: "croslog errors", command: "croslog --priority=err" },
   { label: "dmesg", command: "dmesg --raw" },
-  { label: "processes", command: "ps auxww" }
+  { label: "processes", command: "ps auxww" },
+  { label: "crash reports", command: CRASH_META_COMMAND },
+  { label: "debugd GetLog", command: DEBUGD_GET_LOG_COMMAND },
+  {
+    label: "/var/log + crashes (.tgz)",
+    // tar exits 1 when a log grows while it reads, which is every time.
+    command: `tar czf ${LOG_BUNDLE_PATH} -C / var/log var/spool/crash 2>/dev/null; [ -s ${LOG_BUNDLE_PATH} ]`,
+    fetchPath: LOG_BUNDLE_PATH
+  }
 ];
 
 const FOLLOW_PRESETS = [
@@ -130,27 +157,32 @@ export function SSHConnectDialog({ onConnect, onError }: SSHConnectDialogProps) 
     try {
       persist();
 
-      let content: string;
-      let name: string;
+      let files: ExtractedLogFile[];
 
       if (form.source === "file") {
-        content = await window.api.ssh.readFile(target, form.path);
-        name = form.path.split("/").pop() || "ssh_log";
+        files = await window.api.ssh.readFile(target, form.path);
       } else if (form.fetchPath) {
-        content = await window.api.ssh.collect(target, form.command, form.fetchPath);
-        name = form.fetchPath.split("/").pop() || "ssh_log";
+        files = await window.api.ssh.collect(target, form.command, form.fetchPath);
       } else {
         const result = await window.api.ssh.exec(target, form.command);
         if (result.code !== 0 && result.code !== null && !result.stdout) {
           throw new Error(result.stderr || `Command exited with ${result.code}`);
         }
-        content = result.stdout;
-        name = `${form.command.split(/\s+/)[0]}.log`;
+        files = [{ name: `${form.command.split(/\s+/)[0]}.log`, content: result.stdout }];
       }
 
-      if (!content.trim()) throw new Error("The device returned nothing");
+      if (files.every((file) => !file.imageDataUrl && !file.content.trim())) {
+        throw new Error("The device returned nothing");
+      }
 
-      onConnect([{ id: `ssh://${form.host}/${name}`, name, content }]);
+      onConnect(
+        files.map((file) => ({
+          id: `ssh://${form.host}/${file.name}`,
+          name: file.name,
+          content: file.content,
+          imageDataUrl: file.imageDataUrl
+        }))
+      );
       setOpen(false);
     } catch (err: unknown) {
       console.error(err);
@@ -364,7 +396,10 @@ export function SSHConnectDialog({ onConnect, onError }: SSHConnectDialogProps) 
                       <button
                         key={preset.label}
                         type="button"
-                        onClick={() => set("command", preset.command)}
+                        onClick={() => {
+                          set("command", preset.command);
+                          set("fetchPath", preset.fetchPath ?? "");
+                        }}
                         className="text-[10px] rounded border px-1.5 py-0.5 text-muted-foreground hover:text-foreground hover:border-primary transition-colors"
                       >
                         {preset.label}

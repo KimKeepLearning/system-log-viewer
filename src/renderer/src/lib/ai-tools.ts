@@ -5,6 +5,8 @@ import { extractLogSection, parseDeviceInfo } from "./log-parser";
 import { captureTime, detectBootSessions } from "./log-analysis";
 import { AnalyzedLog, runRules } from "./log-rules";
 import { Redactor } from "./log-redact";
+import { findCrashes } from "./log-crashes";
+import { buildSectionMap, SectionMap } from "./log-sections";
 
 export type AiMarkKind = "cause" | "symptom" | "context";
 
@@ -200,6 +202,20 @@ export const createLogTools = (
       (session) =>
         `boot ${session.index + 1}: ${iso(session.startTs)} → ${iso(session.lastTs)}, ${session.ending}`
     );
+    const sectionsOfAllFiles: SectionMap = new Map();
+    for (const file of text) {
+      for (const [key, body] of buildSectionMap(file.content)) {
+        if (!sectionsOfAllFiles.has(key)) sectionsOfAllFiles.set(key, body);
+      }
+    }
+    const crashes = findCrashes(all, sectionsOfAllFiles).map((crash) => {
+      const where =
+        crash.logIndex !== undefined
+          ? `${idOf.get(all[crash.logIndex].sourceFile)}:${positions[crash.logIndex]}`
+          : `section ${crash.section}`;
+      return `${iso(crash.ts)} ${crash.kind}: ${crash.title}${crash.detail ? ` (${crash.detail})` : ""} @ ${where}`;
+    });
+
     const findings = runRules(all).map((finding) => {
       const sample = finding.sampleIndices[0];
       return `${finding.rule.title} (${finding.rule.severity}) ×${finding.count}, first ${iso(finding.firstTs)}, e.g. ${format(all[sample].sourceFile, positions[sample], all[sample])}`;
@@ -214,6 +230,7 @@ export const createLogTools = (
         findings.length
           ? `Known failure patterns:\n${findings.join("\n")}`
           : "Known failure patterns: none",
+        crashes.length ? `Crashes:\n${crashes.join("\n")}` : "Crashes: none found",
         "Sections (id | file/section | lines | errors | wall-clock span):",
         ...sections,
         "</archive>",

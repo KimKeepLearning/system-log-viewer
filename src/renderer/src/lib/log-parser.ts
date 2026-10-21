@@ -1,6 +1,6 @@
 import { IUserLog } from "./typings";
 import { Board, DeviceInfo } from "./typings/device";
-import { monotonicSecondsToMicros, parseWallTimestamp } from "./log-time";
+import { monotonicSecondsToMicros, parseWallTimestamp, yearlessToMicros } from "./log-time";
 
 export const parseDeviceInfo = (content: string): DeviceInfo => {
   const lines = content.split("\n");
@@ -136,9 +136,10 @@ const parseKernelLogLine = (line: string): IUserLog | null => {
 
 // Example, from device_event_log and network_event_log:
 // 2026-08-30T23:17:31.303993-07:00 USB: ERROR chrome[1016]: usb_service_linux.cc:255 message
-// The optional word before the level is chrome's own component tag (USB,
-// Bluetooth, Login, ...), and the file:line is written bare rather than in
-// brackets, so the generic parser folded it into the message.
+// The optional word before the level is chrome's own component (USB,
+// Bluetooth, Login, ...), kept as the tag so it gets a facet and `tag:usb`
+// works. The file:line is written bare rather than in brackets, so the generic
+// parser folded it into the message.
 const parseDeviceEventLogLine = (line: string): IUserLog | null => {
   const match = line.match(
     /^(\S+)\s+(?:([A-Za-z]+):\s+)?(ERROR|WARNING|EVENT|USER|DEBUG)\s+(\S+?):\s+(\S+\.\w+:\d+)\s+(.*)$/
@@ -156,10 +157,43 @@ const parseDeviceEventLogLine = (line: string): IUserLog | null => {
     tsKind: "wall",
     level: normalizeLevel(level),
     process,
-    // Kept alongside the file so the component is not lost; IUserLog has no
-    // field of its own for it and adding one costs a slot on every log line.
-    source: component ? `${component}: ${sourceFile}` : sourceFile,
+    source: sourceFile,
+    tag: component,
     message
+  };
+};
+
+const LOGCAT_LEVELS: Record<string, LogLevel> = {
+  V: "DEBUG",
+  D: "DEBUG",
+  I: "INFO",
+  W: "WARN",
+  E: "ERROR",
+  F: "ERROR",
+  A: "ERROR"
+};
+
+// Example, from VibeAndroidContainer LOGCAT and ARC's logcat:
+// 09-23 08:37:42.088    54    54 I zygote64: option[12]=-XX:HeapTargetUtilization=0.6
+// threadtime format, which has no year; the stamp is read as UTC like vmlog's,
+// and log-processor supplies the year from the rest of the archive.
+const parseLogcatLine = (line: string): IUserLog | null => {
+  const match = line.match(
+    /^(\d{2})-(\d{2})\s+(\d{2}:\d{2}:\d{2}\.\d{3})\s+(\d+)\s+(\d+)\s+([VDIWEFA])\s+(.*?)\s*:\s(.*)$/
+  );
+  if (!match) return null;
+
+  const ts = yearlessToMicros(Number(match[1]), Number(match[2]), match[3]);
+  if (ts === null) return null;
+
+  return {
+    timestamp: `${match[1]}-${match[2]} ${match[3]}`,
+    ts,
+    tsKind: "yearless",
+    level: LOGCAT_LEVELS[match[6]],
+    process: match[7],
+    source: `${match[4]}:${match[5]}`,
+    message: match[8]
   };
 };
 
@@ -259,6 +293,7 @@ const STRATEGIES = [
   parseBracketedTimestampLogLine,
   parseDeviceEventLogLine,
   parseStandardLogLine,
+  parseLogcatLine,
   parseCrasAtlogLine,
   parseBracketLevelLogLine,
   parseLevelPrefixedLogLine

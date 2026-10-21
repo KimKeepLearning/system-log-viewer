@@ -4,7 +4,15 @@ import { AlertTriangle, Info, ShieldAlert } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@renderer/components/ui/tabs";
 import { Input } from "@renderer/components/ui/input";
 import { cn } from "@renderer/lib/utils";
-import { logFilesAtom } from "@renderer/lib/atom";
+import { logFilesAtom, logStructureAtom, sectionMapsAtom } from "@renderer/lib/atom";
+import { sectionNameOf } from "@renderer/lib/log-domains";
+import { findCrashes } from "@renderer/lib/log-crashes";
+import { memorySnapshot } from "@renderer/lib/log-memory";
+import { serviceHealth } from "@renderer/lib/log-services";
+import { networkSnapshot } from "@renderer/lib/log-network";
+import { deviceCards } from "@renderer/lib/log-device";
+import { collectEntities } from "@renderer/lib/log-entities";
+import type { SectionMap } from "@renderer/lib/log-sections";
 import { extractLogSection } from "@renderer/lib/log-parser";
 import { analyseLogs, BootEnding, BootSession } from "@renderer/lib/log-analysis";
 import { summariseBoot } from "@renderer/lib/log-tables";
@@ -17,13 +25,35 @@ import {
 import type { RuleSeverity } from "@renderer/lib/log-rules";
 import { inspectStorage } from "@renderer/lib/log-storage";
 import { ExtendedLog } from "../types";
+import {
+  CrashesTab,
+  DeviceTab,
+  EntitiesTab,
+  MemoryTab,
+  NetworkTab,
+  ServicesTab
+} from "./overview-sections";
 
 interface OverviewPanelProps {
   logs: ExtendedLog[];
   fileName: string | null;
   onJumpToLog: (log: ExtendedLog) => void;
   onShowSession: (session: BootSession) => void;
+  /** Section names, without the "file::" prefix. */
+  onShowSection: (section: string) => void;
+  /** Composite keys to read merged on one timeline. */
+  onShowMerged: (keys: string[]) => void;
+  onShowTime: (ts: number) => void;
+  onSearch: (phrase: string, mergeable: boolean) => void;
 }
+
+const EMPTY_SECTIONS: SectionMap = new Map();
+
+// Chrome's log is split by session_manager and by login: the system log before
+// sign-in, the user log after it, ui.LATEST for its stderr, each with the
+// previous run beside it. A tarball adds the timestamped chrome_* files.
+const CHROME_SECTION =
+  /^(?:Profile\[\d+\] )?(?:chrome_system_log|chrome_user_log)(?:\.PREVIOUS)?$|^ui_log$|^chrome\/chrome|^ui\/ui\./;
 
 const clock = (micros: number | null): string =>
   micros === null ? "—" : new Date(micros / 1000).toISOString().slice(0, 19).replace("T", " ");
@@ -65,9 +95,46 @@ const Stat = ({ label, value, hint }: { label: string; value: string; hint?: str
 
 // A pass over a hundred thousand rows is about 200ms, which is why this is the
 // landing view rather than something computed during load.
-export function OverviewPanel({ logs, fileName, onJumpToLog, onShowSession }: OverviewPanelProps) {
+export function OverviewPanel({
+  logs,
+  fileName,
+  onJumpToLog,
+  onShowSession,
+  onShowSection,
+  onShowMerged,
+  onShowTime,
+  onSearch
+}: OverviewPanelProps) {
   const logFiles = useAtomValue(logFilesAtom);
+  const logStructure = useAtomValue(logStructureAtom);
+  const sectionMaps = useAtomValue(sectionMapsAtom);
+  const sections = (fileName && sectionMaps[fileName]) || EMPTY_SECTIONS;
   const overview = useMemo(() => analyseLogs(logs), [logs]);
+
+  const chromeSections = useMemo(
+    () =>
+      (logStructure[fileName ?? ""] ?? []).filter((key) => CHROME_SECTION.test(sectionNameOf(key))),
+    [logStructure, fileName]
+  );
+  const crashes = useMemo(() => findCrashes(logs, sections), [logs, sections]);
+  const memory = useMemo(
+    () => memorySnapshot(sections, overview.lastTs ?? Date.now() * 1000),
+    [sections, overview.lastTs]
+  );
+  const services = useMemo(() => serviceHealth(logs), [logs]);
+  const network = useMemo(() => networkSnapshot(sections), [sections]);
+  const networkErrors = useMemo(
+    () =>
+      logs.filter(
+        (log) => log.level === "ERROR" && sectionNameOf(log.sourceFile) === "network_event_log"
+      ),
+    [logs]
+  );
+  const device = useMemo(() => {
+    const file = logFiles.find((entry) => entry.name === fileName);
+    return file ? deviceCards(file.content, sections) : [];
+  }, [logFiles, fileName, sections]);
+  const entities = useMemo(() => collectEntities(logs), [logs]);
 
   const boot = useMemo(() => {
     const file = logFiles.find((entry) => entry.name === fileName);
@@ -132,6 +199,12 @@ export function OverviewPanel({ logs, fileName, onJumpToLog, onShowSession }: Ov
           )}
         </TabsTrigger>
         <TabsTrigger value="clusters">Repeats</TabsTrigger>
+        <TabsTrigger value="crashes">
+          Crashes
+          {crashes.length > 0 && (
+            <span className="ml-1 tabular-nums text-red-500">{crashes.length}</span>
+          )}
+        </TabsTrigger>
         {overview.sessions.length > 0 && (
           <TabsTrigger value="boots">
             Boots
@@ -139,6 +212,16 @@ export function OverviewPanel({ logs, fileName, onJumpToLog, onShowSession }: Ov
           </TabsTrigger>
         )}
         {boot && <TabsTrigger value="boot">Boot</TabsTrigger>}
+        <TabsTrigger value="memory">Memory</TabsTrigger>
+        <TabsTrigger value="services">
+          Services
+          {services.some((service) => service.gaveUp) && (
+            <span className="ml-1 text-red-500">!</span>
+          )}
+        </TabsTrigger>
+        <TabsTrigger value="network">Network</TabsTrigger>
+        <TabsTrigger value="device">Device</TabsTrigger>
+        {entities.length > 0 && <TabsTrigger value="entities">Entities</TabsTrigger>}
         {metrics && <TabsTrigger value="metrics">Metrics</TabsTrigger>}
       </TabsList>
 
@@ -159,8 +242,20 @@ export function OverviewPanel({ logs, fileName, onJumpToLog, onShowSession }: Ov
             />
           </div>
 
-          <div className="text-xs text-muted-foreground tabular-nums">
-            {clock(overview.firstTs)} → {clock(overview.lastTs)} UTC
+          <div className="flex items-center gap-2 text-xs text-muted-foreground tabular-nums">
+            <span>
+              {clock(overview.firstTs)} → {clock(overview.lastTs)} UTC
+            </span>
+            {chromeSections.length > 1 && (
+              <button
+                type="button"
+                onClick={() => onShowMerged(chromeSections)}
+                className="ml-auto h-6 px-2 rounded-md border text-xs font-medium text-foreground hover:bg-muted"
+                title={chromeSections.map(sectionNameOf).join("\n")}
+              >
+                Chrome timeline ({chromeSections.length} logs)
+              </button>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -307,6 +402,37 @@ export function OverviewPanel({ logs, fileName, onJumpToLog, onShowSession }: Ov
             </button>
           ))}
         </TabsContent>
+
+        <TabsContent value="crashes" className="m-0">
+          <CrashesTab
+            crashes={crashes}
+            logs={logs}
+            onJumpToLog={onJumpToLog}
+            onShowSection={onShowSection}
+          />
+        </TabsContent>
+
+        <TabsContent value="memory" className="m-0">
+          <MemoryTab memory={memory} onShowTime={onShowTime} />
+        </TabsContent>
+
+        <TabsContent value="services" className="m-0">
+          <ServicesTab services={services} logs={logs} onJumpToLog={onJumpToLog} />
+        </TabsContent>
+
+        <TabsContent value="network" className="m-0">
+          <NetworkTab network={network} errors={networkErrors} onJumpToLog={onJumpToLog} />
+        </TabsContent>
+
+        <TabsContent value="device" className="m-0">
+          <DeviceTab cards={device} onShowSection={onShowSection} />
+        </TabsContent>
+
+        {entities.length > 0 && (
+          <TabsContent value="entities" className="m-0">
+            <EntitiesTab entities={entities} onSearch={onSearch} />
+          </TabsContent>
+        )}
 
         {overview.sessions.length > 0 && (
           <TabsContent value="boots" className="flex flex-col m-0">

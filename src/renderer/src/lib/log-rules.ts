@@ -72,8 +72,12 @@ export const RULES: Rule[] = [
     id: "ui-restart",
     title: "UI restarted",
     severity: "critical",
-    why: "The session was torn down and rebuilt, which the user sees as the screen going black.",
-    pattern: /ui-post-stop|Restarting ui|session_manager.*(exiting|aborting)|chrome exited/i
+    why: "Chrome died or hung and session_manager restarted it or ended the session, which the user sees as the screen going black.",
+    // Only what session_manager logs when the browser goes away unasked. Every
+    // shutdown and sign-out runs ui-post-stop and logs "SessionManagerService
+    // exiting", and Chrome exits with code 0 or signal 15 when told to.
+    pattern:
+      /Browser process \d+ exited with (?:exit code [1-9]|signal (?!15 )\d+)|Browser hang detected|Aborting browser process|Ending session rather than restarting browser|Child stopped, shutting down|Request vac exit because of chrome segmentation fault/
   },
   {
     id: "upstart-job-failed",
@@ -82,6 +86,27 @@ export const RULES: Rule[] = [
     why: "An init job exited non-zero during boot. Some of them are expected to; the job name says which.",
     pattern:
       /init: [\w.-]+ (?:main|pre-start|post-start) process \(\d+\) terminated with status [1-9]/i
+  },
+  {
+    id: "service-gave-up",
+    title: "Service stopped respawning",
+    severity: "critical",
+    why: "Upstart restarted a job until it hit the respawn limit and then left it down; whatever it provides is gone until reboot.",
+    pattern: /init: [\w.-]+ respawning too fast, stopped/
+  },
+  {
+    id: "android-crash",
+    title: "Android app crashed",
+    severity: "warning",
+    why: "An Android process in the container died: a Java exception or a native signal. The process name is on the next lines of the logcat.",
+    pattern: /^FATAL EXCEPTION: |Fatal signal \d+ \(SIG\w+\)/
+  },
+  {
+    id: "android-anr",
+    title: "Android app not responding",
+    severity: "warning",
+    why: "An Android app blocked its main thread long enough for the system to offer to close it.",
+    pattern: /^ANR in \S+/
   },
   {
     id: "watchdog-missing",

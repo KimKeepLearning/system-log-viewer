@@ -5,7 +5,7 @@
  * comfortably inside the 2^53 range where a JS number is still an exact
  * integer.
  */
-export type TimestampKind = "wall" | "monotonic";
+export type TimestampKind = "wall" | "monotonic" | "yearless";
 
 // Either "2026-08-31T06:17:23.867672Z" or "2026-08-30T23:17:31.303993-07:00".
 // Both appear in a single system_logs.txt: services log UTC, while
@@ -31,6 +31,44 @@ export const parseWallTimestamp = (raw: string): number | null => {
 
 export const monotonicSecondsToMicros = (seconds: string): number =>
   Math.round(Number(seconds) * 1_000_000);
+
+// A leap year, so a Feb 29 stamp survives until the real year is known.
+const PLACEHOLDER_YEAR = 2000;
+
+/** For stamps like logcat's "09-23 08:37:42.088"; log-processor fills in the year. */
+export const yearlessToMicros = (month: number, day: number, time: string): number | null => {
+  const match = /^(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?$/.exec(time);
+  if (!match) return null;
+  const milliseconds = Date.UTC(
+    PLACEHOLDER_YEAR,
+    month - 1,
+    day,
+    Number(match[1]),
+    Number(match[2]),
+    Number(match[3])
+  );
+  const micros = match[4] ? Math.round(Number(`0.${match[4]}`) * 1_000_000) : 0;
+  return milliseconds * 1000 + micros;
+};
+
+const DAY_US = 86_400_000_000;
+
+/**
+ * Moves a yearless stamp into the year of `referenceUs`, the newest wall-clock
+ * time in the same archive. A stamp that would land more than a day after the
+ * reference belongs to the year before: the log cannot postdate its capture.
+ */
+export const resolveYearless = (placeholderUs: number, referenceUs: number): number => {
+  const placeholder = new Date(placeholderUs / 1000);
+  const year = new Date(referenceUs / 1000).getUTCFullYear();
+  const shift = (target: number) => {
+    const moved = new Date(placeholder.getTime());
+    moved.setUTCFullYear(target);
+    return moved.getTime() * 1000 + (placeholderUs % 1000);
+  };
+  const candidate = shift(year);
+  return candidate - referenceUs > DAY_US ? shift(year - 1) : candidate;
+};
 
 export interface BootAnchor {
   /** Epoch microseconds of monotonic time zero. */

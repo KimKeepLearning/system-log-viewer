@@ -12,7 +12,8 @@ import {
   searchModeAtom,
   timeRangeAtom,
   aiMarksAtom,
-  aiPanelOpenAtom
+  aiPanelOpenAtom,
+  sectionFilterAtom
 } from "@renderer/lib/atom";
 import { extractLogSection, parseDeviceInfo } from "@renderer/lib/log-parser";
 import { hierarchyKindOf } from "@renderer/lib/ui-hierarchy";
@@ -92,7 +93,8 @@ function RouteComponent() {
   }, [aiPanelOpen]);
   const [flash, setFlash] = useState<{ index: number; token: number } | null>(null);
 
-  const [searchQuery] = useAtom(searchQueryAtom);
+  const [searchQuery, setSearchQuery] = useAtom(searchQueryAtom);
+  const setSectionFilter = useSetAtom(sectionFilterAtom);
   const parsedQuery = useMemo(() => parseQuery(searchQuery), [searchQuery]);
   const patterns = useMemo(() => highlightPatterns(parsedQuery), [parsedQuery]);
   const setMatchesCount = useSetAtom(searchMatchesCountAtom);
@@ -309,6 +311,17 @@ function RouteComponent() {
     [isMergedView, selectedFileName]
   );
 
+  // The toast's way out. Clearing only the facet filters left a search filter
+  // hiding the line, and nothing scrolled to it once it was back.
+  const revealLine = useCallback(
+    (sourceFile: string, matches: (log: ExtendedLog) => boolean) => {
+      clearFilters();
+      setSearchMode("highlight");
+      setPendingTarget({ sourceFile, matches });
+    },
+    [clearFilters, setSearchMode]
+  );
+
   // The comparison was built from the raw sections, not these rows, so the line
   // is found again by section and text rather than by identity.
   const jumpToEvidence = useCallback(
@@ -336,12 +349,57 @@ function RouteComponent() {
       virtuosoRef.current?.scrollToIndex({ index, align: "center" });
       setFlash({ index, token: Date.now() });
     } else if (allLogs.some(pendingTarget.matches)) {
+      const { sourceFile, matches } = pendingTarget;
       toast.info("That line is hidden by the current filters", {
-        action: { label: "Clear filters", onClick: () => clearFilters() }
+        action: { label: "Clear filters", onClick: () => revealLine(sourceFile, matches) }
       });
     }
     setPendingTarget(null);
-  }, [pendingTarget, view, isMergedView, selectedFileName, visibleLogs, allLogs, clearFilters]);
+  }, [pendingTarget, view, isMergedView, selectedFileName, visibleLogs, allLogs, revealLine]);
+
+  // Merged rows are in time order, so the first row at or after the moment is
+  // the answer. Sequential rows are grouped by section; there the section being
+  // read is searched first, and the whole file only if it does not cover the moment.
+  const jumpToTime = useCallback(
+    (ts: number) => {
+      let index = -1;
+      if (isMergedView) {
+        let low = 0;
+        let high = visibleLogs.length;
+        while (low < high) {
+          const mid = (low + high) >> 1;
+          if ((visibleLogs[mid].ts as number) < ts) low = mid + 1;
+          else high = mid;
+        }
+        index = Math.min(low, visibleLogs.length - 1);
+      } else {
+        const closest = (accept: (log: ExtendedLog) => boolean) => {
+          let best = -1;
+          let bestDistance = Infinity;
+          let first = Infinity;
+          let last = -Infinity;
+          for (let i = 0; i < visibleLogs.length; i++) {
+            const log = visibleLogs[i];
+            if (log.tsKind !== "wall" || typeof log.ts !== "number" || !accept(log)) continue;
+            first = Math.min(first, log.ts);
+            last = Math.max(last, log.ts);
+            const distance = Math.abs(log.ts - ts);
+            if (distance < bestDistance) {
+              bestDistance = distance;
+              best = i;
+            }
+          }
+          return { best, covers: ts >= first && ts <= last };
+        };
+        const inSection = activeFile ? closest((log) => log.sourceFile === activeFile) : null;
+        index = inSection?.covers ? inSection.best : closest(() => true).best;
+      }
+      if (index < 0) return;
+      virtuosoRef.current?.scrollToIndex({ index, align: "center" });
+      setFlash({ index, token: Date.now() });
+    },
+    [isMergedView, visibleLogs, activeFile]
+  );
 
   const marksByLine = useMemo(() => {
     const map = new Map<IUserLog, AiMark>();
@@ -461,12 +519,38 @@ function RouteComponent() {
                     // The evidence exists but the active filters hide it, which
                     // would otherwise look like the jump silently doing nothing.
                     toast.info("That line is hidden by the current filters", {
-                      action: { label: "Clear filters", onClick: () => clearFilters() }
+                      action: {
+                        label: "Clear filters",
+                        onClick: () => revealLine(log.sourceFile, (row) => row === log)
+                      }
                     });
                   }
                 }}
                 onShowSession={(session) => {
                   setTimeRange({ from: session.startTs, to: session.lastTs });
+                  setView("log");
+                }}
+                onShowSection={(section) => {
+                  if (selectedFileName) scrollToSection(`${selectedFileName}::${section}`);
+                }}
+                onShowMerged={(keys) => {
+                  clearFilters();
+                  setSectionFilter(new Set(keys));
+                  setIsMergedView(true);
+                  setView("log");
+                }}
+                onShowTime={(ts) => {
+                  // A vmlog sample covers a couple of seconds; a minute either
+                  // side shows what led up to the peak and what followed.
+                  setTimeRange({ from: ts - 60_000_000, to: ts + 60_000_000 });
+                  setIsMergedView(true);
+                  setView("log");
+                }}
+                onSearch={(phrase, mergeable) => {
+                  clearFilters();
+                  setSearchQuery(`"${phrase}"`);
+                  setSearchMode("filter");
+                  setIsMergedView(mergeable);
                   setView("log");
                 }}
               />
@@ -495,7 +579,7 @@ function RouteComponent() {
                   onToggleMerge={() => setIsMergedView((merged) => !merged)}
                 />
 
-                <TimelineStrip logs={allLogs} events={events} />
+                <TimelineStrip logs={allLogs} events={events} onJumpToTime={jumpToTime} />
 
                 {/* Filters only: Merge is a view mode and sits with the view
                     switch, so this line never has to wrap. */}
