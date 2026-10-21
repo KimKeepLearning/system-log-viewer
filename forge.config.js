@@ -17,6 +17,7 @@ module.exports = {
   ],
   packagerConfig: {
     asar: true,
+    icon: "build/icon",
     // Explicitly set ignore to override .gitignore and ensure 'dist-electron' is included
     ignore: [
       /^\/src/,
@@ -33,7 +34,8 @@ module.exports = {
     {
       name: "@electron-forge/maker-squirrel",
       config: {
-        name: "system_log_viewer"
+        name: "system_log_viewer",
+        setupIcon: "build/icon.ico"
       }
     },
     {
@@ -43,13 +45,15 @@ module.exports = {
     {
       name: "@electron-forge/maker-deb",
       config: {
-        name: "system_log_viewer"
+        name: "system_log_viewer",
+        options: { icon: "build/icon.png" }
       }
     },
     {
       name: "@electron-forge/maker-rpm",
       config: {
-        name: "system_log_viewer"
+        name: "system_log_viewer",
+        options: { icon: "build/icon.png" }
       }
     }
   ],
