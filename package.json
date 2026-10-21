@@ -1,6 +1,6 @@
 {
   "name": "system-log-viewer",
-  "version": "1.8.0",
+  "version": "1.9.0",
   "description": "View chrome system logs easily",
   "license": "MIT",
   "main": "./dist-electron/main/index.js",
