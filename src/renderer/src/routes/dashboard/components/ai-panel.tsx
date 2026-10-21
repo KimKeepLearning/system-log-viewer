@@ -328,7 +328,7 @@ export function AiPanel({ hidden, onJumpToLine, logTools }: AiPanelProps) {
           <p className="text-muted-foreground">
             Then ask Claude Code, for example:{" "}
             <span className="text-foreground">
-              用 system-log-viewer 查一下这个反馈：下午连着 Wi-Fi 突然断了
+              Use system-log-viewer to look into this report: Wi-Fi suddenly dropped this afternoon
             </span>
             . Lines it marks light up here and in the log.
           </p>
@@ -365,7 +365,7 @@ export function AiPanel({ hidden, onJumpToLine, logTools }: AiPanelProps) {
               id="ai-problem"
               value={problem}
               onChange={(event) => setProblem(event.target.value)}
-              placeholder="Paste the customer's words, e.g. 下午三点左右连着 Wi-Fi 突然断了，重连也连不上"
+              placeholder="Paste the customer's words, e.g. Wi-Fi suddenly dropped around 3 pm and would not reconnect"
               className="text-xs min-h-24 max-h-60"
             />
             <div className="flex items-center gap-2">
